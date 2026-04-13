@@ -145,3 +145,85 @@ test("always allow prefix saves only the selected segment prefix", async () => {
 	assert.deepEqual(saved.exact, []);
 	assert.deepEqual(saved.prefixes, ["pnpm run"]);
 });
+
+test("path-allowlisted redirection targets do not prompt", async () => {
+	const prompts: string[] = [];
+	const outLog = path.join(tempDir, "out.log");
+	await fs.writeFile(
+		path.join(tempDir, "bash-command-allowlist.json"),
+		JSON.stringify({ exact: [`echo hi > ${outLog}`], prefixes: [], templates: [] }),
+		"utf8",
+	);
+	await fs.writeFile(
+		path.join(tempDir, "path-guard-allowlist.json"),
+		JSON.stringify({ files: [outLog], directories: [] }),
+		"utf8",
+	);
+	const toolCallHandler = registerGuard();
+
+	const result = await toolCallHandler(
+		{ toolName: "bash", input: { command: `echo hi > ${outLog}` } },
+		{
+			hasUI: true,
+			cwd: tempDir,
+			ui: {
+				async select(message: string) {
+					prompts.push(message);
+					return "Deny";
+				},
+				notify() {},
+			},
+		},
+	);
+
+	assert.equal(result, undefined);
+	assert.deepEqual(prompts, []);
+});
+
+test("redirection prompts run after command approval for the same segment", async () => {
+	const prompts: string[] = [];
+	const responses = ["Allow once", "Allow once"];
+	const outLog = path.join(tempDir, "out.log");
+	const toolCallHandler = registerGuard();
+
+	const result = await toolCallHandler(
+		{ toolName: "bash", input: { command: `pnpm build > ${outLog}` } },
+		{
+			hasUI: true,
+			cwd: tempDir,
+			ui: {
+				async select(message: string) {
+					prompts.push(message);
+					return responses.shift();
+				},
+				notify() {},
+			},
+		},
+	);
+
+	assert.equal(result, undefined);
+	assert.equal(prompts[0], `Allow bash command segment?\n\npnpm build > ${outLog}`);
+	assert.match(prompts[1], /Allow path outside cwd\?\n\n/);
+});
+
+test("denying a redirection path blocks the full command", async () => {
+	const responses = ["Allow once", "Deny"];
+	const outLog = path.join(tempDir, "out.log");
+	const toolCallHandler = registerGuard();
+
+	const result = await toolCallHandler(
+		{ toolName: "bash", input: { command: `pnpm build > ${outLog} && echo done` } },
+		{
+			hasUI: true,
+			cwd: tempDir,
+			ui: {
+				async select() {
+					return responses.shift();
+				},
+				notify() {},
+			},
+		},
+	);
+
+	assert.deepEqual(result, { block: true, reason: "Blocked by user" });
+});

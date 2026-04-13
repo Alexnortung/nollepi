@@ -9,7 +9,7 @@ export type PathAllowlist = {
 	directories: string[];
 };
 
-function getStore() {
+export function getPathAllowlistStore() {
 	const configDir = process.env.PI_CODING_AGENT_DIR ?? path.join(os.homedir(), ".pi", "agent");
 	const allowlistFile = path.join(configDir, "path-guard-allowlist.json");
 	return createJsonStore<PathAllowlist>(allowlistFile, {
@@ -58,7 +58,7 @@ export function matchesAllowlist(allowlist: PathAllowlist, target: string) {
 }
 
 export async function loadPathAllowlist() {
-	return normalizeAllowlist(await getStore().load());
+	return normalizeAllowlist(await getPathAllowlistStore().load());
 }
 
 export type PathAllowlistStore = {
@@ -143,7 +143,7 @@ async function maybePromptForAccess(
 		return undefined;
 	}
 
-	const store = getStore();
+	const store = getPathAllowlistStore();
 	const allowlist = normalizeAllowlist(await store.load());
 	if (matchesAllowlist(allowlist, target)) {
 		return undefined;

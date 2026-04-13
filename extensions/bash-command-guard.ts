@@ -1,5 +1,5 @@
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import { loadPathAllowlist, canonicalizePath, matchesAllowlist } from "./path-guard";
+import { loadPathAllowlist, canonicalizePath, getPathAllowlistStore, matchesAllowlist, promptPathAccess } from "./path-guard";
 import { loadCommandAllowlist, saveCommandAllowlist } from "./bash-command-guard/allowlist";
 import { choosePrefixSpan, evaluateCommandPolicy } from "./bash-command-guard/engine";
 import { extractRedirectionTargets } from "./bash-command-guard/parser";
@@ -13,42 +13,51 @@ export default function (pi: ExtensionAPI) {
 			cwd: ctx.cwd,
 			allowlist: await loadCommandAllowlist(),
 		});
-		const targets = extractRedirectionTargets(command);
-		const pathAllowlist = await loadPathAllowlist();
-		const blockedTargets: string[] = [];
-		for (const target of targets) {
-			const absolute = await canonicalizePath(target);
-			if (!matchesAllowlist(pathAllowlist, absolute)) blockedTargets.push(absolute);
+		const pathAllowlistStore = getPathAllowlistStore();
+		let allTargetsAllowed = true;
+		for (const segment of policy.segments) {
+			const pathAllowlist = await loadPathAllowlist();
+			for (const target of extractRedirectionTargets(segment.command)) {
+				const absolute = await canonicalizePath(target);
+				if (!matchesAllowlist(pathAllowlist, absolute)) {
+					allTargetsAllowed = false;
+					break;
+				}
+			}
+			if (!allTargetsAllowed) break;
 		}
 
-		if (policy.allowed && blockedTargets.length === 0) return undefined;
+		if (policy.allowed && allTargetsAllowed) return undefined;
 		if (!ctx.hasUI) return { block: true, reason: "Blocked by user" };
 
 		for (const segment of policy.segments) {
-			if (segment.allowed) continue;
+			if (!segment.allowed) {
+				const choice = await ctx.ui.select(`Allow bash command segment?\n\n${segment.command}`, [
+					"Deny",
+					"Allow once",
+					"Always allow exact command",
+					"Always allow prefix",
+				]);
 
-			const choice = await ctx.ui.select(`Allow bash command segment?\n\n${segment.command}`, [
-				"Deny",
-				"Allow once",
-				"Always allow exact command",
-				"Always allow prefix",
-			]);
-
-			if (choice === "Always allow exact command") {
-				await saveCommandAllowlist({ exact: [segment.normalizedCommand] });
-				continue;
+				if (choice === "Always allow exact command") {
+					await saveCommandAllowlist({ exact: [segment.normalizedCommand] });
+				} else if (choice === "Always allow prefix") {
+					const prefix = await choosePrefixSpan(ctx.ui, segment.normalizedTokens);
+					await saveCommandAllowlist({ prefixes: [prefix] });
+				} else if (choice !== "Allow once") {
+					return { block: true, reason: "Blocked by user" };
+				}
 			}
 
-			if (choice === "Always allow prefix") {
-				const prefix = await choosePrefixSpan(ctx.ui, segment.normalizedTokens);
-				await saveCommandAllowlist({ prefixes: [prefix] });
-				continue;
+			for (const target of extractRedirectionTargets(segment.command)) {
+				const absolute = await canonicalizePath(target);
+				const pathAllowlist = await loadPathAllowlist();
+				if (matchesAllowlist(pathAllowlist, absolute)) continue;
+				const allowed = await promptPathAccess(pathAllowlistStore, ctx.ui, absolute);
+				if (!allowed) return { block: true, reason: "Blocked by user" };
 			}
-
-			if (choice !== "Allow once") return { block: true, reason: "Blocked by user" };
 		}
 
-		if (blockedTargets.length > 0) return { block: true, reason: "Blocked by user" };
 		return undefined;
 	});
 }
