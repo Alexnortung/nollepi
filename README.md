@@ -5,7 +5,7 @@ This repository is my personal [pi](https://pi.dev) package for coding agent con
 ## What’s in here
 
 - `package.json` — marks this repo as a pi package
-- `extensions/` — place custom pi extensions here
+- `extensions/path-guard.ts` — prompts before file access outside the current working directory
 
 ## Install on a new machine
 
@@ -29,16 +29,16 @@ This repository is my personal [pi](https://pi.dev) package for coding agent con
 
 3. Start or reload pi.
 
-## Local development
+## Path guard allowlist
 
-If you have the repo cloned locally, you can also install it by path:
+The extension stores its persistent allowlist here:
 
 ```bash
-pi install /absolute/path/to/nollepi
+~/.pi/agent/path-guard-allowlist.json
 ```
+
+It records exact files and directories that you chose to trust.
 
 ## Adding extensions
 
-Drop `.ts` files or extension directories into `extensions/` and reload pi.
-
-This scaffold intentionally ships with no extensions yet.
+Drop additional `.ts` files or extension directories into `extensions/` and reload pi.
