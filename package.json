@@ -1,0 +1,10 @@
+{
+  "name": "nollepi-pi-config",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Personal pi coding agent configuration",
+  "keywords": ["pi-package"],
+  "pi": {
+    "extensions": ["./extensions"]
+  }
+}
