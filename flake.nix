@@ -13,7 +13,13 @@
     };
   };
 
-  outputs = inputs@{ self, nixpkgs, llm-agents, ... }:
+  outputs =
+    inputs@{
+      self,
+      nixpkgs,
+      llm-agents,
+      ...
+    }:
     let
       systems = [
         "x86_64-linux"
@@ -24,7 +30,8 @@
       forAllSystems = nixpkgs.lib.genAttrs systems;
     in
     {
-      packages = forAllSystems (system:
+      packages = forAllSystems (
+        system:
         let
           pkgs = nixpkgs.legacyPackages.${system};
           upstreamPi = llm-agents.packages.${system}.pi;
@@ -47,19 +54,16 @@
               fi
             done
 
-            cp ${usageExtensionSrc}/index.ts "$out/extensions/pi-usage-extension/index.ts"
-            cp ${usageExtensionSrc}/package.json "$out/extensions/pi-usage-extension/package.json"
-            cp ${usageExtensionSrc}/README.md "$out/extensions/pi-usage-extension/README.md"
-            cp ${usageExtensionSrc}/CHANGELOG.md "$out/extensions/pi-usage-extension/CHANGELOG.md"
-            cp ${usageExtensionSrc}/LICENSE "$out/extensions/pi-usage-extension/LICENSE"
-            cp ${usageExtensionSrc}/screenshot.png "$out/extensions/pi-usage-extension/screenshot.png"
+            cp -r ${usageExtensionSrc} "$out/extensions/pi-usage-extension/"
           '';
         in
         {
           default = piPackageDir;
-        });
+        }
+      );
 
-      apps = forAllSystems (system:
+      apps = forAllSystems (
+        system:
         let
           pkgs = nixpkgs.legacyPackages.${system};
           upstreamPi = llm-agents.packages.${system}.pi;
@@ -78,9 +82,11 @@
             type = "app";
             program = "${runPi}/bin/nollepi";
           };
-        });
+        }
+      );
 
-      devShells = forAllSystems (system:
+      devShells = forAllSystems (
+        system:
         let
           pkgs = nixpkgs.legacyPackages.${system};
         in
@@ -91,6 +97,7 @@
               pkgs.tsx
             ];
           };
-        });
+        }
+      );
     };
 }
