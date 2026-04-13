@@ -23,8 +23,15 @@
       packages = forAllSystems (system:
         let
           pkgs = nixpkgs.legacyPackages.${system};
+          upstreamPi = llm-agents.packages.${system}.pi;
+          upstreamPackageRoot = "${upstreamPi}/lib/node_modules/@mariozechner/pi-coding-agent";
           piPackageDir = pkgs.runCommand "nollepi-pi-package" { } ''
             mkdir -p "$out"
+            cp -R ${upstreamPackageRoot}/dist "$out/"
+            cp -R ${upstreamPackageRoot}/docs "$out/"
+            cp -R ${upstreamPackageRoot}/examples "$out/"
+            cp ${upstreamPackageRoot}/README.md "$out/README.md"
+            cp ${upstreamPackageRoot}/CHANGELOG.md "$out/CHANGELOG.md"
             cp ${./package.json} "$out/package.json"
             cp -R ${./extensions} "$out/extensions"
           '';
