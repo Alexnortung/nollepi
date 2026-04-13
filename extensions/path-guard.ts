@@ -103,9 +103,10 @@ export async function savePathAllowlistEntry(
 	return savePathAllowlistDirectory(storeApi, directory);
 }
 
-async function maybePromptForAccess(
+export async function maybePromptForAccess(
 	event: { toolName: string; input: { path?: unknown } },
 	ctx: any,
+	storeApi: PathAllowlistStore = store,
 ) {
 	if (event.toolName !== "read" && event.toolName !== "write" && event.toolName !== "edit") {
 		return undefined;
@@ -123,7 +124,7 @@ async function maybePromptForAccess(
 		return undefined;
 	}
 
-	const allowlist = normalizeAllowlist(await store.load());
+	const allowlist = normalizeAllowlist(await storeApi.reload());
 	if (matchesAllowlist(allowlist, target)) {
 		return undefined;
 	}
@@ -157,7 +158,7 @@ async function maybePromptForAccess(
 
 	if (choice === "Always allow this file") {
 		try {
-			await savePathAllowlistEntry(store, "file", target);
+			await savePathAllowlistEntry(storeApi, "file", target);
 		} catch {
 			ctx.ui.notify(`Could not save allowlist; allowing once for ${target}`, "warning");
 		}
@@ -166,7 +167,7 @@ async function maybePromptForAccess(
 
 	if (choice === "Always allow this directory") {
 		try {
-			await savePathAllowlistEntry(store, "directory", target);
+			await savePathAllowlistEntry(storeApi, "directory", target);
 		} catch {
 			ctx.ui.notify(`Could not save allowlist; allowing once for ${target}`, "warning");
 		}
