@@ -86,6 +86,14 @@ export async function savePathAllowlistDirectory(storeApi: PathAllowlistStore, d
 	});
 }
 
+async function detectDirectoryTarget(target: string) {
+	try {
+		return (await fs.stat(target)).isDirectory();
+	} catch {
+		return false;
+	}
+}
+
 export async function savePathAllowlistEntry(
 	storeApi: PathAllowlistStore,
 	kind: "file" | "directory",
@@ -166,8 +174,20 @@ export async function maybePromptForAccess(
 	}
 
 	if (choice === "Always allow this directory") {
+		const directories = buildDirectoryChoices(target, {
+			isDirectory: await detectDirectoryTarget(target),
+		});
+		if (!directories.length) {
+			return { block: true, reason: "Blocked by user" };
+		}
+
+		const selectedDirectory = await ctx.ui.select("Choose directory to always allow", directories);
+		if (!selectedDirectory) {
+			return { block: true, reason: "Blocked by user" };
+		}
+
 		try {
-			await savePathAllowlistEntry(storeApi, "directory", target);
+			await savePathAllowlistDirectory(storeApi, selectedDirectory);
 		} catch {
 			ctx.ui.notify(`Could not save allowlist; allowing once for ${target}`, "warning");
 		}
