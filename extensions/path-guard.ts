@@ -60,7 +60,7 @@ export async function loadPathAllowlist() {
 	return normalizeAllowlist(await store.load());
 }
 
-type PathAllowlistStore = {
+export type PathAllowlistStore = {
 	reload(): Promise<PathAllowlist>;
 	save(next: PathAllowlist): Promise<PathAllowlist>;
 };
@@ -83,6 +83,43 @@ export async function savePathAllowlistEntry(
 		files: allowlist.files,
 		directories: [...allowlist.directories, directory],
 	});
+}
+
+export async function promptPathAccess(
+	storeApi: PathAllowlistStore,
+	ui: any,
+	target: string,
+	message = `Allow path outside cwd?\n\n${target}`,
+) {
+	const choice = await ui.select(message, [
+		"Deny",
+		"Allow once",
+		"Always allow this file",
+		"Always allow this directory",
+	]);
+
+	if (!choice || choice === "Deny") return false;
+	if (choice === "Allow once") return true;
+
+	if (choice === "Always allow this file") {
+		try {
+			await savePathAllowlistEntry(storeApi, "file", target);
+		} catch {
+			ui.notify(`Could not save allowlist; allowing once for ${target}`, "warning");
+		}
+		return true;
+	}
+
+	if (choice === "Always allow this directory") {
+		try {
+			await savePathAllowlistEntry(storeApi, "directory", target);
+		} catch {
+			ui.notify(`Could not save allowlist; allowing once for ${target}`, "warning");
+		}
+		return true;
+	}
+
+	return false;
 }
 
 async function maybePromptForAccess(
@@ -114,48 +151,19 @@ async function maybePromptForAccess(
 		return { block: true, reason: `Path outside cwd is not allowlisted: ${target}` };
 	}
 
-	const choice = await ctx.ui.select(
+	const allowed = await promptPathAccess(
+		store,
+		ctx.ui,
+		target,
 		[
 			`Tool: ${event.toolName}`,
 			`Path: ${target}`,
 			`CWD: ${cwd}`,
 			"Allow this access?",
 		].join("\n"),
-		[
-			"Deny",
-			"Allow once",
-			"Always allow this file",
-			"Always allow this directory",
-		],
 	);
 
-	if (!choice || choice === "Deny") {
-		return { block: true, reason: "Blocked by user" };
-	}
-
-	if (choice === "Allow once") {
-		return undefined;
-	}
-
-	if (choice === "Always allow this file") {
-		try {
-			await savePathAllowlistEntry(store, "file", target);
-		} catch {
-			ctx.ui.notify(`Could not save allowlist; allowing once for ${target}`, "warning");
-		}
-		return undefined;
-	}
-
-	if (choice === "Always allow this directory") {
-		try {
-			await savePathAllowlistEntry(store, "directory", target);
-		} catch {
-			ctx.ui.notify(`Could not save allowlist; allowing once for ${target}`, "warning");
-		}
-		return undefined;
-	}
-
-	return { block: true, reason: "Blocked by user" };
+	return allowed ? undefined : { block: true, reason: "Blocked by user" };
 }
 
 export default function (pi: ExtensionAPI) {
