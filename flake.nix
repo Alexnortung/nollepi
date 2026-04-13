@@ -50,7 +50,7 @@
             runtimeInputs = [ upstreamPi ];
             text = ''
               export PI_PACKAGE_DIR=${piPackageDir}
-              exec ${upstreamPi}/bin/pi "$@"
+              exec ${upstreamPi}/bin/pi --extension ${piPackageDir} "$@"
             '';
           };
         in
