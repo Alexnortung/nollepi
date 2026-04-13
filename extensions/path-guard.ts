@@ -9,18 +9,19 @@ export type PathAllowlist = {
 	directories: string[];
 };
 
-const CONFIG_DIR = process.env.PI_CODING_AGENT_DIR ?? path.join(os.homedir(), ".pi", "agent");
-const ALLOWLIST_FILE = path.join(CONFIG_DIR, "path-guard-allowlist.json");
-
-const store = createJsonStore<PathAllowlist>(ALLOWLIST_FILE, {
-	defaultValue: { files: [], directories: [] },
-	merge(current, next) {
-		return {
-			files: [...new Set([...current.files, ...next.files])],
-			directories: [...new Set([...current.directories, ...next.directories])],
-		};
-	},
-});
+function getStore() {
+	const configDir = process.env.PI_CODING_AGENT_DIR ?? path.join(os.homedir(), ".pi", "agent");
+	const allowlistFile = path.join(configDir, "path-guard-allowlist.json");
+	return createJsonStore<PathAllowlist>(allowlistFile, {
+		defaultValue: { files: [], directories: [] },
+		merge(current, next) {
+			return {
+				files: [...new Set([...current.files, ...next.files])],
+				directories: [...new Set([...current.directories, ...next.directories])],
+			};
+		},
+	});
+}
 
 function stripAtPrefix(value: string) {
 	return value.startsWith("@") ? value.slice(1) : value;
@@ -57,7 +58,7 @@ export function matchesAllowlist(allowlist: PathAllowlist, target: string) {
 }
 
 export async function loadPathAllowlist() {
-	return normalizeAllowlist(await store.load());
+	return normalizeAllowlist(await getStore().load());
 }
 
 export type PathAllowlistStore = {
@@ -142,6 +143,7 @@ async function maybePromptForAccess(
 		return undefined;
 	}
 
+	const store = getStore();
 	const allowlist = normalizeAllowlist(await store.load());
 	if (matchesAllowlist(allowlist, target)) {
 		return undefined;

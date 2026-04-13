@@ -4,19 +4,20 @@ import path from "node:path";
 import { createJsonStore } from "../shared/json-store";
 import type { CommandAllowlist } from "./types";
 
-const CONFIG_DIR = process.env.PI_CODING_AGENT_DIR ?? path.join(os.homedir(), ".pi", "agent");
-const ALLOWLIST_FILE = path.join(CONFIG_DIR, "bash-command-allowlist.json");
-
-const store = createJsonStore<CommandAllowlist>(ALLOWLIST_FILE, {
-	defaultValue: { exact: [], prefixes: [], templates: [] },
-	merge(current, next) {
-		return {
-			exact: [...new Set([...current.exact, ...next.exact])],
-			prefixes: [...new Set([...current.prefixes, ...next.prefixes])],
-			templates: [...new Set([...current.templates, ...next.templates])],
-		};
-	},
-});
+function getStore() {
+	const configDir = process.env.PI_CODING_AGENT_DIR ?? path.join(os.homedir(), ".pi", "agent");
+	const allowlistFile = path.join(configDir, "bash-command-allowlist.json");
+	return createJsonStore<CommandAllowlist>(allowlistFile, {
+		defaultValue: { exact: [], prefixes: [], templates: [] },
+		merge(current, next) {
+			return {
+				exact: [...new Set([...current.exact, ...next.exact])],
+				prefixes: [...new Set([...current.prefixes, ...next.prefixes])],
+				templates: [...new Set([...current.templates, ...next.templates])],
+			};
+		},
+	});
+}
 
 export function normalizeAllowlist(raw: Partial<CommandAllowlist> | undefined): CommandAllowlist {
 	return {
@@ -27,12 +28,12 @@ export function normalizeAllowlist(raw: Partial<CommandAllowlist> | undefined): 
 }
 
 export async function loadCommandAllowlist() {
-	return normalizeAllowlist(await store.load());
+	return normalizeAllowlist(await getStore().load());
 }
 
 export async function saveCommandAllowlist(next: Partial<CommandAllowlist>) {
 	const current = await loadCommandAllowlist();
-	return store.save({
+	return getStore().save({
 		exact: [...current.exact, ...(next.exact ?? [])],
 		prefixes: [...current.prefixes, ...(next.prefixes ?? [])],
 		templates: [...current.templates, ...(next.templates ?? [])],

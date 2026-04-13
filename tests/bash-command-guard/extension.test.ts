@@ -1,21 +1,147 @@
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { strict as assert } from "node:assert";
-import { test } from "node:test";
+import { before, beforeEach, test } from "node:test";
 import bashCommandGuard from "../../extensions/bash-command-guard";
 
-test("blocks unknown bash commands when no UI is available", async () => {
+let tempDir = "";
+
+before(async () => {
+	tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "bash-command-guard-"));
+	process.env.PI_CODING_AGENT_DIR = tempDir;
+});
+
+beforeEach(async () => {
+	await fs.writeFile(
+		path.join(tempDir, "bash-command-allowlist.json"),
+		JSON.stringify({ exact: [], prefixes: [], templates: [] }),
+		"utf8",
+	);
+	await fs.writeFile(
+		path.join(tempDir, "path-guard-allowlist.json"),
+		JSON.stringify({ files: [], directories: [] }),
+		"utf8",
+	);
+});
+
+function registerGuard() {
 	let toolCallHandler: any;
 	const pi = {
 		on(event: string, handler: any) {
 			if (event === "tool_call") toolCallHandler = handler;
 		},
 	} as any;
-
 	bashCommandGuard(pi);
+	return toolCallHandler;
+}
 
+test("blocks unknown bash commands when no UI is available", async () => {
+	const toolCallHandler = registerGuard();
 	const result = await toolCallHandler(
 		{ toolName: "bash", input: { command: "rm -rf /tmp/demo" } },
 		{ hasUI: false, cwd: "/tmp", ui: {} },
 	);
 
 	assert.deepEqual(result, { block: true, reason: "Blocked by user" });
+});
+
+test("prompts only for missing segments in order", async () => {
+	const prompts: string[] = [];
+	await fs.writeFile(
+		path.join(tempDir, "bash-command-allowlist.json"),
+		JSON.stringify({ exact: ["cd folder"], prefixes: [], templates: [] }),
+		"utf8",
+	);
+	const toolCallHandler = registerGuard();
+
+	const result = await toolCallHandler(
+		{ toolName: "bash", input: { command: "cd folder && pnpm install && pnpm build" } },
+		{
+			hasUI: true,
+			cwd: tempDir,
+			ui: {
+				async select(message: string) {
+					prompts.push(message);
+					return "Allow once";
+				},
+				notify() {},
+			},
+		},
+	);
+
+	assert.equal(result, undefined);
+	assert.deepEqual(prompts, [
+		"Allow bash command segment?\n\npnpm install",
+		"Allow bash command segment?\n\npnpm build",
+	]);
+});
+
+test("denying a later segment blocks the full command", async () => {
+	const responses = ["Allow once", "Deny"];
+	const toolCallHandler = registerGuard();
+
+	const result = await toolCallHandler(
+		{ toolName: "bash", input: { command: "pnpm install && pnpm build" } },
+		{
+			hasUI: true,
+			cwd: tempDir,
+			ui: {
+				async select() {
+					return responses.shift();
+				},
+				notify() {},
+			},
+		},
+	);
+
+	assert.deepEqual(result, { block: true, reason: "Blocked by user" });
+});
+
+test("always allow exact command saves only the selected segment", async () => {
+	const toolCallHandler = registerGuard();
+
+	const result = await toolCallHandler(
+		{ toolName: "bash", input: { command: "cd folder && pnpm install" } },
+		{
+			cwd: tempDir,
+			hasUI: true,
+			ui: {
+				async select(message: string) {
+					return message.includes("pnpm install") ? "Always allow exact command" : "Allow once";
+				},
+				notify() {},
+			},
+		},
+	);
+
+	assert.equal(result, undefined);
+	const saved = JSON.parse(await fs.readFile(path.join(tempDir, "bash-command-allowlist.json"), "utf8"));
+	assert.deepEqual(saved.exact, ["pnpm install"]);
+	assert.deepEqual(saved.prefixes, []);
+});
+
+test("always allow prefix saves only the selected segment prefix", async () => {
+	const toolCallHandler = registerGuard();
+
+	const result = await toolCallHandler(
+		{ toolName: "bash", input: { command: "cd folder && pnpm run build --watch" } },
+		{
+			cwd: tempDir,
+			hasUI: true,
+			ui: {
+				async select(message: string) {
+					if (message.includes("pnpm run build --watch")) return "Always allow prefix";
+					if (message === "Choose prefix span") return "pnpm run";
+					return "Allow once";
+				},
+				notify() {},
+			},
+		},
+	);
+
+	assert.equal(result, undefined);
+	const saved = JSON.parse(await fs.readFile(path.join(tempDir, "bash-command-allowlist.json"), "utf8"));
+	assert.deepEqual(saved.exact, []);
+	assert.deepEqual(saved.prefixes, ["pnpm run"]);
 });

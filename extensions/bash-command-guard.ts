@@ -22,30 +22,33 @@ export default function (pi: ExtensionAPI) {
 		}
 
 		if (policy.allowed && blockedTargets.length === 0) return undefined;
-
 		if (!ctx.hasUI) return { block: true, reason: "Blocked by user" };
-		const choice = await ctx.ui.select(
-			blockedTargets.length
-				? `${policy.message}\n\nRedirection targets require approval:\n${blockedTargets.map((target) => `- ${target}`).join("\n")}`
-				: policy.message,
-			[
-			"Deny",
-			"Allow once",
-			"Always allow exact command",
-			"Always allow prefix",
-		]);
 
-		if (choice === "Always allow exact command") {
-			await saveCommandAllowlist({ exact: [policy.normalizedCommand] });
-			return undefined;
+		for (const segment of policy.segments) {
+			if (segment.allowed) continue;
+
+			const choice = await ctx.ui.select(`Allow bash command segment?\n\n${segment.command}`, [
+				"Deny",
+				"Allow once",
+				"Always allow exact command",
+				"Always allow prefix",
+			]);
+
+			if (choice === "Always allow exact command") {
+				await saveCommandAllowlist({ exact: [segment.normalizedCommand] });
+				continue;
+			}
+
+			if (choice === "Always allow prefix") {
+				const prefix = await choosePrefixSpan(ctx.ui, segment.normalizedTokens);
+				await saveCommandAllowlist({ prefixes: [prefix] });
+				continue;
+			}
+
+			if (choice !== "Allow once") return { block: true, reason: "Blocked by user" };
 		}
 
-		if (choice === "Always allow prefix") {
-			const prefix = await choosePrefixSpan(ctx.ui, policy.normalizedTokens);
-			await saveCommandAllowlist({ prefixes: [prefix] });
-			return undefined;
-		}
-
-		return choice === "Allow once" ? undefined : { block: true, reason: "Blocked by user" };
+		if (blockedTargets.length > 0) return { block: true, reason: "Blocked by user" };
+		return undefined;
 	});
 }
