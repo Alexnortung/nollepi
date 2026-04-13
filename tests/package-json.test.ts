@@ -6,9 +6,10 @@ const pkg = JSON.parse(fs.readFileSync(new URL("../package.json", import.meta.ur
 	pi?: { extensions?: unknown };
 };
 
-test("package manifest points pi at concrete extension entry files", () => {
+test("package manifest points pi at concrete extension entry files and vendored packages", () => {
 	assert.deepEqual(pkg.pi?.extensions, [
 		"./extensions/path-guard.ts",
 		"./extensions/bash-command-guard.ts",
+		"./extensions/pi-usage-extension",
 	]);
 });

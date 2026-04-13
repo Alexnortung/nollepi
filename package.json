@@ -11,6 +11,10 @@
     "tsx": "^4.20.5"
   },
   "pi": {
-    "extensions": ["./extensions/path-guard.ts", "./extensions/bash-command-guard.ts"]
+    "extensions": [
+      "./extensions/path-guard.ts",
+      "./extensions/bash-command-guard.ts",
+      "./extensions/pi-usage-extension"
+    ]
   }
 }

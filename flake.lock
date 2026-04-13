@@ -136,10 +136,27 @@
         "type": "github"
       }
     },
+    "pi-usage-extension": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1775812424,
+        "narHash": "sha256-UNQwFGNGZZGpiyLuR6VjmI6SM23Ats5E9vFFsBaq3lw=",
+        "owner": "tmustier",
+        "repo": "pi-extensions",
+        "rev": "ceed4443c525cb74485556f7327f100a79f5dac3",
+        "type": "github"
+      },
+      "original": {
+        "owner": "tmustier",
+        "repo": "pi-extensions",
+        "type": "github"
+      }
+    },
     "root": {
       "inputs": {
         "llm-agents": "llm-agents",
-        "nixpkgs": "nixpkgs"
+        "nixpkgs": "nixpkgs",
+        "pi-usage-extension": "pi-usage-extension"
       }
     },
     "systems": {
