@@ -56,6 +56,19 @@ export function matchesAllowlist(allowlist: PathAllowlist, target: string) {
 	return allowlist.directories.some((directory) => isInside(directory, target));
 }
 
+export function buildDirectoryChoices(target: string, input?: { isDirectory?: boolean }) {
+	const start = input?.isDirectory ? target : path.dirname(target);
+	const choices: string[] = [];
+	let current = start;
+
+	while (current !== path.dirname(current)) {
+		choices.push(current);
+		current = path.dirname(current);
+	}
+
+	return choices;
+}
+
 export async function loadPathAllowlist() {
 	return normalizeAllowlist(await store.load());
 }
@@ -64,6 +77,14 @@ type PathAllowlistStore = {
 	reload(): Promise<PathAllowlist>;
 	save(next: PathAllowlist): Promise<PathAllowlist>;
 };
+
+export async function savePathAllowlistDirectory(storeApi: PathAllowlistStore, directory: string) {
+	const allowlist = normalizeAllowlist(await storeApi.reload());
+	return storeApi.save({
+		files: allowlist.files,
+		directories: [...allowlist.directories, directory],
+	});
+}
 
 export async function savePathAllowlistEntry(
 	storeApi: PathAllowlistStore,
@@ -79,10 +100,7 @@ export async function savePathAllowlistEntry(
 	}
 
 	const directory = await canonicalizePath(path.dirname(target));
-	return storeApi.save({
-		files: allowlist.files,
-		directories: [...allowlist.directories, directory],
-	});
+	return savePathAllowlistDirectory(storeApi, directory);
 }
 
 async function maybePromptForAccess(
