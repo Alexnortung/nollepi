@@ -23,6 +23,14 @@ This repository is my personal [pi](https://pi.dev) package for coding agent con
 
 3. Start or reload pi.
 
+## Nix flake
+
+This repo also ships a flake.
+
+- `nix build` builds a reproducible Pi package directory from the tracked files in this repo.
+- `nix run` launches upstream Pi with that packaged directory.
+- `nix develop` opens a shell with Node tooling for hacking on the extensions.
+
 ## Path guard allowlist
 
 The extension stores its persistent allowlist here:
