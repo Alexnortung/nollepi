@@ -42,11 +42,17 @@ It stores three kinds of allowlist entries:
 - `prefix`
 - `template`
 
+Multi-segment commands are evaluated per top-level segment, such as `cd folder`, `pnpm install`, and `pnpm build` in `cd folder && pnpm install && pnpm build`.
+If every segment is already allowlisted, the full command runs without prompting.
+If only some segments are missing from the allowlist, the guard prompts only for those missing segments, in order.
+
 Prefix entries are literal command prefixes. If `pnpm run test` is saved as a prefix, any command starting with `pnpm run test` runs without prompting.
+When you choose "Always allow prefix", the UI lets you pick how much of the current segment to save, such as `pnpm`, `pnpm run`, or `pnpm run test`.
+Exact-command approvals are also saved for the selected segment only, not the whole multi-segment command.
 
-When you choose "Always allow prefix", the UI lets you pick how much of the command to save, such as `pnpm`, `pnpm run`, or `pnpm run test`.
-
-Redirection targets like `>` and `>>` are checked with the path-guard allowlist before the command runs.
+Redirection targets like `>` and `>>` are checked per segment against the path-guard allowlist.
+If a redirection target is already path-allowlisted, it does not prompt.
+If not, the bash guard reuses the path-guard approval prompt for that target after the segment's command approval succeeds.
 
 ## Adding extensions
 
