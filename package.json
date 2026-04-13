@@ -4,6 +4,12 @@
   "private": true,
   "description": "Personal pi coding agent configuration",
   "keywords": ["pi-package"],
+  "scripts": {
+    "test": "node --import tsx --test"
+  },
+  "devDependencies": {
+    "tsx": "^4.20.5"
+  },
   "pi": {
     "extensions": ["./extensions"]
   }

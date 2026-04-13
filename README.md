@@ -18,13 +18,7 @@ This repository is my personal [pi](https://pi.dev) package for coding agent con
 2. Install this package from git:
 
    ```bash
-   pi install git:<your-repo-url>
-   ```
-
-   Example:
-
-   ```bash
-   pi install git:github.com/yourname/nollepi
+   pi install git:github.com/Alexnortung/nollepi
    ```
 
 3. Start or reload pi.
@@ -38,6 +32,21 @@ The extension stores its persistent allowlist here:
 ```
 
 It records exact files and directories that you chose to trust.
+
+## Bash command guard allowlist
+
+The bash command guard extension intercepts `bash` tool calls and asks before execution.
+It stores three kinds of allowlist entries:
+
+- `exact`
+- `prefix`
+- `template`
+
+Prefix entries are literal command prefixes. If `pnpm run test` is saved as a prefix, any command starting with `pnpm run test` runs without prompting.
+
+When you choose "Always allow prefix", the UI lets you pick how much of the command to save, such as `pnpm`, `pnpm run`, or `pnpm run test`.
+
+Redirection targets like `>` and `>>` are checked with the path-guard allowlist before the command runs.
 
 ## Adding extensions
 

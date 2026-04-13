@@ -6,3 +6,4 @@ Thumbs.db
 .worktrees/
 node_modules/
 *.log
+docs/superpowers/

@@ -2,8 +2,9 @@ import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { createJsonStore } from "./shared/json-store";
 
-type Allowlist = {
+export type PathAllowlist = {
 	files: string[];
 	directories: string[];
 };
@@ -11,13 +12,21 @@ type Allowlist = {
 const CONFIG_DIR = process.env.PI_CODING_AGENT_DIR ?? path.join(os.homedir(), ".pi", "agent");
 const ALLOWLIST_FILE = path.join(CONFIG_DIR, "path-guard-allowlist.json");
 
-let allowlistCache: Allowlist | null = null;
+const store = createJsonStore<PathAllowlist>(ALLOWLIST_FILE, {
+	defaultValue: { files: [], directories: [] },
+	merge(current, next) {
+		return {
+			files: [...new Set([...current.files, ...next.files])],
+			directories: [...new Set([...current.directories, ...next.directories])],
+		};
+	},
+});
 
 function stripAtPrefix(value: string) {
 	return value.startsWith("@") ? value.slice(1) : value;
 }
 
-async function canonicalize(target: string) {
+export async function canonicalizePath(target: string) {
 	const resolved = path.resolve(stripAtPrefix(target));
 	try {
 		return await fs.realpath(resolved);
@@ -35,40 +44,20 @@ function normalizeStoredPath(value: string) {
 	return path.resolve(stripAtPrefix(value));
 }
 
-function normalizeAllowlist(raw: Partial<Allowlist> | undefined): Allowlist {
+export function normalizeAllowlist(raw: Partial<PathAllowlist> | undefined): PathAllowlist {
 	return {
 		files: Array.isArray(raw?.files) ? raw.files.map(normalizeStoredPath) : [],
 		directories: Array.isArray(raw?.directories) ? raw.directories.map(normalizeStoredPath) : [],
 	};
 }
 
-async function loadAllowlist() {
-	if (allowlistCache) return allowlistCache;
-
-	try {
-		const raw = await fs.readFile(ALLOWLIST_FILE, "utf8");
-		allowlistCache = normalizeAllowlist(JSON.parse(raw) as Partial<Allowlist>);
-	} catch {
-		allowlistCache = { files: [], directories: [] };
-	}
-
-	return allowlistCache;
-}
-
-async function saveAllowlist(allowlist: Allowlist) {
-	const next = {
-		files: [...new Set(allowlist.files)],
-		directories: [...new Set(allowlist.directories)],
-	};
-
-	await fs.mkdir(path.dirname(ALLOWLIST_FILE), { recursive: true });
-	await fs.writeFile(ALLOWLIST_FILE, `${JSON.stringify(next, null, 2)}\n`, "utf8");
-	allowlistCache = next;
-}
-
-function matchesAllowlist(allowlist: Allowlist, target: string) {
+export function matchesAllowlist(allowlist: PathAllowlist, target: string) {
 	if (allowlist.files.includes(target)) return true;
 	return allowlist.directories.some((directory) => isInside(directory, target));
+}
+
+export async function loadPathAllowlist() {
+	return normalizeAllowlist(await store.load());
 }
 
 async function maybePromptForAccess(
@@ -84,14 +73,14 @@ async function maybePromptForAccess(
 		return { block: true, reason: "Missing file path" };
 	}
 
-	const cwd = await canonicalize(ctx.cwd);
-	const target = await canonicalize(rawPath);
+	const cwd = await canonicalizePath(ctx.cwd);
+	const target = await canonicalizePath(rawPath);
 
 	if (isInside(cwd, target)) {
 		return undefined;
 	}
 
-	const allowlist = await loadAllowlist();
+	const allowlist = normalizeAllowlist(await store.load());
 	if (matchesAllowlist(allowlist, target)) {
 		return undefined;
 	}
@@ -125,7 +114,7 @@ async function maybePromptForAccess(
 
 	if (choice === "Always allow this file") {
 		try {
-			await saveAllowlist({
+			await store.save({
 				files: [...allowlist.files, target],
 				directories: allowlist.directories,
 			});
@@ -136,9 +125,9 @@ async function maybePromptForAccess(
 	}
 
 	if (choice === "Always allow this directory") {
-		const directory = await canonicalize(path.dirname(target));
+		const directory = await canonicalizePath(path.dirname(target));
 		try {
-			await saveAllowlist({
+			await store.save({
 				files: allowlist.files,
 				directories: [...allowlist.directories, directory],
 			});
