@@ -60,6 +60,31 @@ export async function loadPathAllowlist() {
 	return normalizeAllowlist(await store.load());
 }
 
+type PathAllowlistStore = {
+	reload(): Promise<PathAllowlist>;
+	save(next: PathAllowlist): Promise<PathAllowlist>;
+};
+
+export async function savePathAllowlistEntry(
+	storeApi: PathAllowlistStore,
+	kind: "file" | "directory",
+	target: string,
+) {
+	const allowlist = normalizeAllowlist(await storeApi.reload());
+	if (kind === "file") {
+		return storeApi.save({
+			files: [...allowlist.files, target],
+			directories: allowlist.directories,
+		});
+	}
+
+	const directory = await canonicalizePath(path.dirname(target));
+	return storeApi.save({
+		files: allowlist.files,
+		directories: [...allowlist.directories, directory],
+	});
+}
+
 async function maybePromptForAccess(
 	event: { toolName: string; input: { path?: unknown } },
 	ctx: any,
@@ -114,10 +139,7 @@ async function maybePromptForAccess(
 
 	if (choice === "Always allow this file") {
 		try {
-			await store.save({
-				files: [...allowlist.files, target],
-				directories: allowlist.directories,
-			});
+			await savePathAllowlistEntry(store, "file", target);
 		} catch {
 			ctx.ui.notify(`Could not save allowlist; allowing once for ${target}`, "warning");
 		}
@@ -125,12 +147,8 @@ async function maybePromptForAccess(
 	}
 
 	if (choice === "Always allow this directory") {
-		const directory = await canonicalizePath(path.dirname(target));
 		try {
-			await store.save({
-				files: allowlist.files,
-				directories: [...allowlist.directories, directory],
-			});
+			await savePathAllowlistEntry(store, "directory", target);
 		} catch {
 			ctx.ui.notify(`Could not save allowlist; allowing once for ${target}`, "warning");
 		}
