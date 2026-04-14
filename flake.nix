@@ -74,7 +74,13 @@
             text = ''
               export PI_PACKAGE_DIR=${piPackageDir}
               # --no-extensions makes sure that we don't load any extensions from the user's envitonment
-              exec ${upstreamPi}/bin/pi --no-extensions --extension ${piPackageDir} "$@"
+              exec ${upstreamPi}/bin/pi \
+                --no-extensions \
+                --extension ${piPackageDir} \
+                --no-skills \
+                --skill ${./skills} \
+                --skill "$PWD/.agents/skills/" \
+                "$@"
             '';
           };
         in
