@@ -9,6 +9,7 @@ import {
 	matchesAllowlist,
 	maybePromptForAccess,
 	normalizeAllowlist,
+	promptPathAccess,
 	savePathAllowlistDirectory,
 	savePathAllowlistEntry,
 } from "../extensions/path-guard";
@@ -148,4 +149,42 @@ test("maybePromptForAccess saves the selected parent directory from the second p
 		files: [],
 		directories: ["/tmp/demo"],
 	});
+});
+
+test("promptPathAccess allows once without persisting", async () => {
+	const saved: any[] = [];
+	const ui = {
+		async select() {
+			return "Allow once";
+		},
+		notify() {},
+	};
+
+	const result = await promptPathAccess(
+		{ reload: async () => ({ files: [], directories: [] }), save: async (next) => { saved.push(next); return next; } },
+		ui,
+		"/tmp/out.log",
+	);
+
+	assert.equal(result, true);
+	assert.deepEqual(saved, []);
+});
+
+test("promptPathAccess saves file approval when requested", async () => {
+	let saved: any;
+	const ui = {
+		async select() {
+			return "Always allow this file";
+		},
+		notify() {},
+	};
+
+	const result = await promptPathAccess(
+		{ reload: async () => ({ files: [], directories: [] }), save: async (next) => { saved = next; return next; } },
+		ui,
+		"/tmp/out.log",
+	);
+
+	assert.equal(result, true);
+	assert.deepEqual(saved.files, ["/tmp/out.log"]);
 });

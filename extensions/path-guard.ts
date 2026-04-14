@@ -9,18 +9,19 @@ export type PathAllowlist = {
 	directories: string[];
 };
 
-const CONFIG_DIR = process.env.PI_CODING_AGENT_DIR ?? path.join(os.homedir(), ".pi", "agent");
-const ALLOWLIST_FILE = path.join(CONFIG_DIR, "path-guard-allowlist.json");
-
-const store = createJsonStore<PathAllowlist>(ALLOWLIST_FILE, {
-	defaultValue: { files: [], directories: [] },
-	merge(current, next) {
-		return {
-			files: [...new Set([...current.files, ...next.files])],
-			directories: [...new Set([...current.directories, ...next.directories])],
-		};
-	},
-});
+export function getPathAllowlistStore() {
+	const configDir = process.env.PI_CODING_AGENT_DIR ?? path.join(os.homedir(), ".pi", "agent");
+	const allowlistFile = path.join(configDir, "path-guard-allowlist.json");
+	return createJsonStore<PathAllowlist>(allowlistFile, {
+		defaultValue: { files: [], directories: [] },
+		merge(current, next) {
+			return {
+				files: [...new Set([...current.files, ...next.files])],
+				directories: [...new Set([...current.directories, ...next.directories])],
+			};
+		},
+	});
+}
 
 function stripAtPrefix(value: string) {
 	return value.startsWith("@") ? value.slice(1) : value;
@@ -70,10 +71,10 @@ export function buildDirectoryChoices(target: string, input?: { isDirectory?: bo
 }
 
 export async function loadPathAllowlist() {
-	return normalizeAllowlist(await store.load());
+	return normalizeAllowlist(await getPathAllowlistStore().load());
 }
 
-type PathAllowlistStore = {
+export type PathAllowlistStore = {
 	reload(): Promise<PathAllowlist>;
 	save(next: PathAllowlist): Promise<PathAllowlist>;
 };
@@ -111,10 +112,59 @@ export async function savePathAllowlistEntry(
 	return savePathAllowlistDirectory(storeApi, directory);
 }
 
+export async function promptPathAccess(
+	storeApi: PathAllowlistStore,
+	ui: any,
+	target: string,
+	message = `Allow path outside cwd?\n\n${target}`,
+) {
+	const choice = await ui.select(message, [
+		"Deny",
+		"Allow once",
+		"Always allow this file",
+		"Always allow this directory",
+	]);
+
+	if (!choice || choice === "Deny") return false;
+	if (choice === "Allow once") return true;
+
+	if (choice === "Always allow this file") {
+		try {
+			await savePathAllowlistEntry(storeApi, "file", target);
+		} catch {
+			ui.notify(`Could not save allowlist; allowing once for ${target}`, "warning");
+		}
+		return true;
+	}
+
+	if (choice === "Always allow this directory") {
+		const directories = buildDirectoryChoices(target, {
+			isDirectory: await detectDirectoryTarget(target),
+		});
+		if (!directories.length) {
+			return false;
+		}
+
+		const selectedDirectory = await ui.select("Choose directory to always allow", directories);
+		if (!selectedDirectory) {
+			return false;
+		}
+
+		try {
+			await savePathAllowlistDirectory(storeApi, selectedDirectory);
+		} catch {
+			ui.notify(`Could not save allowlist; allowing once for ${target}`, "warning");
+		}
+		return true;
+	}
+
+	return false;
+}
+
 export async function maybePromptForAccess(
 	event: { toolName: string; input: { path?: unknown } },
 	ctx: any,
-	storeApi: PathAllowlistStore = store,
+	storeApi: PathAllowlistStore = getPathAllowlistStore(),
 ) {
 	if (event.toolName !== "read" && event.toolName !== "write" && event.toolName !== "edit") {
 		return undefined;
@@ -141,60 +191,19 @@ export async function maybePromptForAccess(
 		return { block: true, reason: `Path outside cwd is not allowlisted: ${target}` };
 	}
 
-	const choice = await ctx.ui.select(
+	const allowed = await promptPathAccess(
+		storeApi,
+		ctx.ui,
+		target,
 		[
 			`Tool: ${event.toolName}`,
 			`Path: ${target}`,
 			`CWD: ${cwd}`,
 			"Allow this access?",
 		].join("\n"),
-		[
-			"Deny",
-			"Allow once",
-			"Always allow this file",
-			"Always allow this directory",
-		],
 	);
 
-	if (!choice || choice === "Deny") {
-		return { block: true, reason: "Blocked by user" };
-	}
-
-	if (choice === "Allow once") {
-		return undefined;
-	}
-
-	if (choice === "Always allow this file") {
-		try {
-			await savePathAllowlistEntry(storeApi, "file", target);
-		} catch {
-			ctx.ui.notify(`Could not save allowlist; allowing once for ${target}`, "warning");
-		}
-		return undefined;
-	}
-
-	if (choice === "Always allow this directory") {
-		const directories = buildDirectoryChoices(target, {
-			isDirectory: await detectDirectoryTarget(target),
-		});
-		if (!directories.length) {
-			return { block: true, reason: "Blocked by user" };
-		}
-
-		const selectedDirectory = await ctx.ui.select("Choose directory to always allow", directories);
-		if (!selectedDirectory) {
-			return { block: true, reason: "Blocked by user" };
-		}
-
-		try {
-			await savePathAllowlistDirectory(storeApi, selectedDirectory);
-		} catch {
-			ctx.ui.notify(`Could not save allowlist; allowing once for ${target}`, "warning");
-		}
-		return undefined;
-	}
-
-	return { block: true, reason: "Blocked by user" };
+	return allowed ? undefined : { block: true, reason: "Blocked by user" };
 }
 
 export default function (pi: ExtensionAPI) {
