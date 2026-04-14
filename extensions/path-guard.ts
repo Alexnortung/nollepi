@@ -57,6 +57,19 @@ export function matchesAllowlist(allowlist: PathAllowlist, target: string) {
 	return allowlist.directories.some((directory) => isInside(directory, target));
 }
 
+export function buildDirectoryChoices(target: string, input?: { isDirectory?: boolean }) {
+	const start = input?.isDirectory ? target : path.dirname(target);
+	const choices: string[] = [];
+	let current = start;
+
+	while (current !== path.dirname(current)) {
+		choices.push(current);
+		current = path.dirname(current);
+	}
+
+	return choices;
+}
+
 export async function loadPathAllowlist() {
 	return normalizeAllowlist(await getPathAllowlistStore().load());
 }
@@ -65,6 +78,22 @@ export type PathAllowlistStore = {
 	reload(): Promise<PathAllowlist>;
 	save(next: PathAllowlist): Promise<PathAllowlist>;
 };
+
+export async function savePathAllowlistDirectory(storeApi: PathAllowlistStore, directory: string) {
+	const allowlist = normalizeAllowlist(await storeApi.reload());
+	return storeApi.save({
+		files: allowlist.files,
+		directories: [...allowlist.directories, directory],
+	});
+}
+
+async function detectDirectoryTarget(target: string) {
+	try {
+		return (await fs.stat(target)).isDirectory();
+	} catch {
+		return false;
+	}
+}
 
 export async function savePathAllowlistEntry(
 	storeApi: PathAllowlistStore,
@@ -80,10 +109,7 @@ export async function savePathAllowlistEntry(
 	}
 
 	const directory = await canonicalizePath(path.dirname(target));
-	return storeApi.save({
-		files: allowlist.files,
-		directories: [...allowlist.directories, directory],
-	});
+	return savePathAllowlistDirectory(storeApi, directory);
 }
 
 export async function promptPathAccess(
@@ -112,8 +138,20 @@ export async function promptPathAccess(
 	}
 
 	if (choice === "Always allow this directory") {
+		const directories = buildDirectoryChoices(target, {
+			isDirectory: await detectDirectoryTarget(target),
+		});
+		if (!directories.length) {
+			return false;
+		}
+
+		const selectedDirectory = await ui.select("Choose directory to always allow", directories);
+		if (!selectedDirectory) {
+			return false;
+		}
+
 		try {
-			await savePathAllowlistEntry(storeApi, "directory", target);
+			await savePathAllowlistDirectory(storeApi, selectedDirectory);
 		} catch {
 			ui.notify(`Could not save allowlist; allowing once for ${target}`, "warning");
 		}
@@ -123,9 +161,10 @@ export async function promptPathAccess(
 	return false;
 }
 
-async function maybePromptForAccess(
+export async function maybePromptForAccess(
 	event: { toolName: string; input: { path?: unknown } },
 	ctx: any,
+	storeApi: PathAllowlistStore = getPathAllowlistStore(),
 ) {
 	if (event.toolName !== "read" && event.toolName !== "write" && event.toolName !== "edit") {
 		return undefined;
@@ -143,8 +182,7 @@ async function maybePromptForAccess(
 		return undefined;
 	}
 
-	const store = getPathAllowlistStore();
-	const allowlist = normalizeAllowlist(await store.load());
+	const allowlist = normalizeAllowlist(await storeApi.reload());
 	if (matchesAllowlist(allowlist, target)) {
 		return undefined;
 	}
@@ -154,7 +192,7 @@ async function maybePromptForAccess(
 	}
 
 	const allowed = await promptPathAccess(
-		store,
+		storeApi,
 		ctx.ui,
 		target,
 		[

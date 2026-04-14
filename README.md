@@ -41,6 +41,8 @@ The extension stores its persistent allowlist here:
 
 It records exact files and directories that you chose to trust.
 
+When you choose **Always allow this directory**, path guard asks which directory to trust. It offers the nearest directory first, then each parent directory upward, excluding `/`.
+
 ## Bash command guard allowlist
 
 The bash command guard extension intercepts `bash` tool calls and asks before execution.
