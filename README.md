@@ -28,7 +28,7 @@ This repository is my personal [pi](https://pi.dev) package for coding agent con
 This repo also ships a flake.
 
 - `nix build` builds a reproducible Pi package directory from the tracked files in this repo.
-- `nix run` launches upstream Pi with that packaged directory.
+- `nix run` launches upstream Pi with that packaged directory and disables extension discovery outside this repo (`-e` still works).
 - `nix develop` opens a shell with Node tooling for hacking on the extensions.
 
 ## Path guard allowlist
@@ -66,4 +66,4 @@ If not, the bash guard reuses the path-guard approval prompt for that target aft
 
 ## Adding extensions
 
-Drop additional `.ts` files or extension directories into `extensions/` and reload pi.
+Drop additional pi package directories into `extensions/` and reload pi.
