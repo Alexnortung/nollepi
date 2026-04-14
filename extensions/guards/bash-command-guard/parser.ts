@@ -115,12 +115,17 @@ export function splitCommandSegments(command: string) {
 	return splitTopLevel(command, ["&&", "||", "|&", "|", ";"]);
 }
 
-function isRedirectionToken(token: string) {
-	return /^(?:\d+)?(?:>>?|&>|<)$/.test(token) || /^(?:\d+)?(?:>>?|&>|<).+/.test(token);
-}
+const REDIRECTION_PREFIXES = ["2>>", "2>", "&>", ">>", ">", "<"];
 
-function isFdDuplicationToken(token: string) {
-	return /^\d?>&\d+$/.test(token) || /^&>\d+$/.test(token);
+function parseRedirectionToken(token: string) {
+	for (const prefix of REDIRECTION_PREFIXES) {
+		if (!token.startsWith(prefix)) continue;
+		const rest = token.slice(prefix.length);
+		if (prefix === "2>" && rest.startsWith("&")) return null;
+		if (prefix === "&>" && rest.startsWith("&")) return null;
+		return { prefix, rest };
+	}
+	return null;
 }
 
 export function extractRedirectionTargets(command: string) {
@@ -129,17 +134,16 @@ export function extractRedirectionTargets(command: string) {
 
 	for (let i = 0; i < tokens.length; i++) {
 		const token = tokens[i];
-		if (!isRedirectionToken(token)) continue;
-		if (isFdDuplicationToken(token)) continue;
+		const parsed = parseRedirectionToken(token);
+		if (!parsed) continue;
 
-		const match = token.match(/^(?:\d+)?(>>?|&>|<)(.+)$/);
-		if (match?.[2]) {
-			if (!match[2].startsWith("&")) targets.push(match[2]);
+		if (parsed.rest) {
+			if (!parsed.rest.startsWith("&")) targets.push(parsed.rest);
 			continue;
 		}
 
 		const next = tokens[i + 1];
-		if (next && !isRedirectionToken(next) && !next.startsWith("&")) {
+		if (next && !parseRedirectionToken(next) && !next.startsWith("&")) {
 			targets.push(next);
 			i += 1;
 		}

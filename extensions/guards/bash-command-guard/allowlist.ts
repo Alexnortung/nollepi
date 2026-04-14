@@ -1,12 +1,10 @@
-import fs from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
+import { getCodingAgentConfigDir } from "../shared/config-dir";
 import { createJsonStore } from "../shared/json-store";
 import type { CommandAllowlist } from "./types";
 
 function getStore() {
-	const configDir = process.env.PI_CODING_AGENT_DIR ?? path.join(os.homedir(), ".pi", "agent");
-	const allowlistFile = path.join(configDir, "bash-command-allowlist.json");
+	const allowlistFile = path.join(getCodingAgentConfigDir(), "bash-command-allowlist.json");
 	return createJsonStore<CommandAllowlist>(allowlistFile, {
 		defaultValue: { exact: [], prefixes: [], templates: [] },
 		merge(current, next) {

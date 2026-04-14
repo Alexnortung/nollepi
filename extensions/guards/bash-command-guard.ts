@@ -1,14 +1,15 @@
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI, BashToolCallEvent } from "@mariozechner/pi-coding-agent";
 import { loadPathAllowlist, canonicalizePath, getPathAllowlistStore, matchesAllowlist, promptPathAccess } from "./path-guard";
 import { loadCommandAllowlist, saveCommandAllowlist } from "./bash-command-guard/allowlist";
 import { choosePrefixSpan, evaluateCommandPolicy } from "./bash-command-guard/engine";
-import { extractRedirectionTargets } from "./bash-command-guard/parser";
+import { extractRedirectionTargets } from "./bash-command-guard/policy";
 
 export default function (pi: ExtensionAPI) {
 	pi.on("tool_call", async (event, ctx) => {
 		if (event.toolName !== "bash") return undefined;
+		const { input } = event as BashToolCallEvent;
 
-		const command = typeof event.input.command === "string" ? event.input.command : "";
+		const command = input.command;
 		const policy = await evaluateCommandPolicy(command, {
 			cwd: ctx.cwd,
 			allowlist: await loadCommandAllowlist(),

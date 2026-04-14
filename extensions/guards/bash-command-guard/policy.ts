@@ -1,4 +1,6 @@
-import { tokenizeCommand, splitCommandSegments as splitCommandSegmentsImpl } from "./parser";
+import { tokenizeCommand, splitCommandSegments, extractRedirectionTargets } from "./parser";
+
+export { splitCommandSegments, extractRedirectionTargets };
 
 function normalizeTemplateToken(token: string) {
 	return token.trim();
@@ -6,47 +8,6 @@ function normalizeTemplateToken(token: string) {
 
 export function normalizeCommand(command: string) {
 	return tokenizeCommand(command).join(" ");
-}
-
-export function splitCommandSegments(command: string) {
-	return splitCommandSegmentsImpl(command);
-}
-
-const REDIRECTION_PREFIXES = ["2>>", "2>", "&>", ">>", ">", "<"];
-
-function parseRedirectionToken(token: string) {
-	for (const prefix of REDIRECTION_PREFIXES) {
-		if (!token.startsWith(prefix)) continue;
-		const rest = token.slice(prefix.length);
-		if (prefix === "2>" && rest.startsWith("&")) return null;
-		if (prefix === "&>" && rest.startsWith("&")) return null;
-		return { prefix, rest };
-	}
-	return null;
-}
-
-export function extractRedirectionTargets(command: string) {
-	const tokens = tokenizeCommand(command);
-	const targets: string[] = [];
-
-	for (let i = 0; i < tokens.length; i++) {
-		const token = tokens[i];
-		const parsed = parseRedirectionToken(token);
-		if (!parsed) continue;
-
-		if (parsed.rest) {
-			if (!parsed.rest.startsWith("&")) targets.push(parsed.rest);
-			continue;
-		}
-
-		const next = tokens[i + 1];
-		if (next && !parseRedirectionToken(next) && !next.startsWith("&")) {
-			targets.push(next);
-			i += 1;
-		}
-	}
-
-	return targets;
 }
 
 export function matchesExact(command: string, exact: string) {

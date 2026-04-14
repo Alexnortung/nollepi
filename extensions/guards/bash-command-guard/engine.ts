@@ -41,7 +41,7 @@ export async function evaluateCommandPolicy(
 	};
 }
 
-export async function choosePrefixSpan(ui: any, tokens: string[]) {
+export async function choosePrefixSpan(ui: Pick<import("@mariozechner/pi-coding-agent").ExtensionUIContext, "select">, tokens: string[]) {
 	if (!tokens.length) return "";
 	const choices = tokens.map((_, index) => tokens.slice(0, index + 1).join(" "));
 	const choice = await ui.select("Choose prefix span", choices);

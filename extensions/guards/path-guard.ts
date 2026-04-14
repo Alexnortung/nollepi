@@ -1,7 +1,7 @@
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI, ExtensionUIContext, ToolCallEvent } from "@mariozechner/pi-coding-agent";
 import fs from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
+import { getCodingAgentConfigDir } from "./shared/config-dir";
 import { createJsonStore } from "./shared/json-store";
 
 export type PathAllowlist = {
@@ -10,8 +10,7 @@ export type PathAllowlist = {
 };
 
 export function getPathAllowlistStore() {
-	const configDir = process.env.PI_CODING_AGENT_DIR ?? path.join(os.homedir(), ".pi", "agent");
-	const allowlistFile = path.join(configDir, "path-guard-allowlist.json");
+	const allowlistFile = path.join(getCodingAgentConfigDir(), "path-guard-allowlist.json");
 	return createJsonStore<PathAllowlist>(allowlistFile, {
 		defaultValue: { files: [], directories: [] },
 		merge(current, next) {
@@ -114,7 +113,7 @@ export async function savePathAllowlistEntry(
 
 export async function promptPathAccess(
 	storeApi: PathAllowlistStore,
-	ui: any,
+	ui: Pick<ExtensionUIContext, "select" | "notify">,
 	target: string,
 	message = `Allow path outside cwd?\n\n${target}`,
 ) {
@@ -162,15 +161,16 @@ export async function promptPathAccess(
 }
 
 export async function maybePromptForAccess(
-	event: { toolName: string; input: { path?: unknown } },
-	ctx: any,
+	event: Pick<ToolCallEvent, "toolName" | "input">,
+	ctx: Pick<import("@mariozechner/pi-coding-agent").ExtensionContext, "cwd" | "hasUI" | "ui">,
 	storeApi: PathAllowlistStore = getPathAllowlistStore(),
 ) {
 	if (event.toolName !== "read" && event.toolName !== "write" && event.toolName !== "edit") {
 		return undefined;
 	}
 
-	const rawPath = typeof event.input.path === "string" ? event.input.path : undefined;
+	const input = event.input as Record<string, unknown>;
+	const rawPath = typeof input.path === "string" ? input.path : undefined;
 	if (!rawPath) {
 		return { block: true, reason: "Missing file path" };
 	}
@@ -207,5 +207,5 @@ export async function maybePromptForAccess(
 }
 
 export default function (pi: ExtensionAPI) {
-	pi.on("tool_call", async (event, ctx) => maybePromptForAccess(event as any, ctx));
+	pi.on("tool_call", async (event, ctx) => maybePromptForAccess(event, ctx));
 }
