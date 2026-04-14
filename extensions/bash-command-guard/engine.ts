@@ -23,13 +23,21 @@ export async function evaluateCommandPolicy(
 ): Promise<CommandPolicy> {
 	const normalizedCommand = normalizeCommand(command);
 	const normalizedTokens = normalizedCommand ? normalizedCommand.split(" ") : [];
-	const segments = splitCommandSegments(command);
-	const allowed = segments.every((segment) => allowSegment(segment, input.allowlist));
+	const segments = splitCommandSegments(command).map((segment) => {
+		const normalizedSegment = normalizeCommand(segment);
+		return {
+			command: segment,
+			normalizedCommand: normalizedSegment,
+			normalizedTokens: normalizedSegment ? normalizedSegment.split(" ") : [],
+			allowed: allowSegment(segment, input.allowlist),
+		};
+	});
 	return {
-		allowed,
+		allowed: segments.every((segment) => segment.allowed),
 		normalizedCommand,
 		normalizedTokens,
 		message: `Allow bash command?\n\n${command}`,
+		segments,
 	};
 }
 

@@ -4,7 +4,7 @@ import path from "node:path";
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
 import { createJsonStore } from "../extensions/shared/json-store";
-import { matchesAllowlist, normalizeAllowlist, savePathAllowlistEntry } from "../extensions/path-guard";
+import { matchesAllowlist, normalizeAllowlist, promptPathAccess, savePathAllowlistEntry } from "../extensions/path-guard";
 
 test("path allowlist still matches files and directories", () => {
 	const allowlist = normalizeAllowlist({
@@ -61,4 +61,42 @@ test("reloading before saving preserves manual directory edits", async () => {
 		files: [],
 		directories: ["/tmp/manual", "/tmp/new/project"],
 	});
+});
+
+test("promptPathAccess allows once without persisting", async () => {
+	const saved: any[] = [];
+	const ui = {
+		async select() {
+			return "Allow once";
+		},
+		notify() {},
+	};
+
+	const result = await promptPathAccess(
+		{ reload: async () => ({ files: [], directories: [] }), save: async (next) => { saved.push(next); return next; } },
+		ui,
+		"/tmp/out.log",
+	);
+
+	assert.equal(result, true);
+	assert.deepEqual(saved, []);
+});
+
+test("promptPathAccess saves file approval when requested", async () => {
+	let saved: any;
+	const ui = {
+		async select() {
+			return "Always allow this file";
+		},
+		notify() {},
+	};
+
+	const result = await promptPathAccess(
+		{ reload: async () => ({ files: [], directories: [] }), save: async (next) => { saved = next; return next; } },
+		ui,
+		"/tmp/out.log",
+	);
+
+	assert.equal(result, true);
+	assert.deepEqual(saved.files, ["/tmp/out.log"]);
 });
