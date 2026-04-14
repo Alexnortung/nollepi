@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
-import { createJsonStore } from "../extensions/shared/json-store";
+import { createJsonStore } from "../extensions/guards/shared/json-store";
 import {
 	buildDirectoryChoices,
 	matchesAllowlist,
@@ -12,7 +12,7 @@ import {
 	promptPathAccess,
 	savePathAllowlistDirectory,
 	savePathAllowlistEntry,
-} from "../extensions/path-guard";
+} from "../extensions/guards/path-guard.ts";
 
 test("path allowlist still matches files and directories", () => {
 	const allowlist = normalizeAllowlist({

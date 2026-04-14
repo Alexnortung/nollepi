@@ -7,8 +7,8 @@ import {
 	matchesExact,
 	matchesPrefix,
 	matchesTemplate,
-} from "../../extensions/bash-command-guard/policy";
-import { evaluateCommandPolicy } from "../../extensions/bash-command-guard/engine";
+} from "../../extensions/guards/bash-command-guard/policy";
+import { evaluateCommandPolicy } from "../../extensions/guards/bash-command-guard/engine";
 
 test("command boundaries are split conservatively", () => {
 	assert.deepEqual(splitCommandSegments('pnpm run test && echo done'), ["pnpm run test", "echo done"]);

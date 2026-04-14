@@ -1,0 +1,13 @@
+{
+  "name": "nollepi-guards",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "keywords": ["pi-package"],
+  "pi": {
+    "extensions": [
+      "./path-guard.ts",
+      "./bash-command-guard.ts"
+    ]
+  }
+}

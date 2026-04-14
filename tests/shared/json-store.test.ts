@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
-import { createJsonStore } from "../../extensions/shared/json-store";
+import { createJsonStore } from "../../extensions/guards/shared/json-store";
 
 test("reloads from disk before save so concurrent edits are merged", async () => {
 	const dir = await fs.mkdtemp(path.join(os.tmpdir(), "json-store-"));

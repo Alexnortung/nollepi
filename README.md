@@ -5,7 +5,7 @@ This repository is my personal [pi](https://pi.dev) package for coding agent con
 ## What’s in here
 
 - `package.json` — marks this repo as a pi package
-- `extensions/path-guard.ts` — prompts before file access outside the current working directory
+- `extensions/guards/` — contains the path guard and bash command guard extensions
 
 ## Install on a new machine
 

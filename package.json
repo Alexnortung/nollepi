@@ -1,20 +1,21 @@
 {
-  "name": "nollepi-pi-config",
-  "version": "0.0.0",
-  "private": true,
-  "description": "Personal pi coding agent configuration",
-  "keywords": ["pi-package"],
-  "scripts": {
-    "test": "node --import tsx --test"
-  },
-  "devDependencies": {
-    "tsx": "^4.20.5"
-  },
-  "pi": {
-    "extensions": [
-      "./extensions/path-guard.ts",
-      "./extensions/bash-command-guard.ts",
-      "./extensions/pi-usage-extension"
-    ]
-  }
+	"name": "nollepi-pi-config",
+	"version": "0.0.0",
+	"private": true,
+	"description": "Personal pi coding agent configuration",
+	"keywords": [
+		"pi-package"
+	],
+	"scripts": {
+		"test": "node --import tsx --test"
+	},
+	"devDependencies": {
+		"tsx": "^4.20.5"
+	},
+	"pi": {
+		"extensions": [
+			"./extensions/guards",
+			"./extensions/pi-usage-extension"
+		]
+	}
 }

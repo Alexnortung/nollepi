@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { strict as assert } from "node:assert";
 import { before, beforeEach, test } from "node:test";
-import bashCommandGuard from "../../extensions/bash-command-guard";
+import bashCommandGuard from "../../extensions/guards/bash-command-guard.ts";
 
 let tempDir = "";
 
