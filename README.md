@@ -6,6 +6,7 @@ This repository is my personal [pi](https://pi.dev) package for coding agent con
 
 - `package.json` — marks this repo as a pi package
 - `extensions/guards/` — contains the path guard and bash command guard extensions
+- `skills/` — local skills plus the vendored [obra/superpowers](https://github.com/obra/superpowers) skills
 
 ## Install on a new machine
 
@@ -67,3 +68,8 @@ If not, the bash guard reuses the path-guard approval prompt for that target aft
 ## Adding extensions
 
 Drop additional pi package directories into `extensions/` and reload pi.
+
+## Installed skill packs
+
+This package now bundles the Superpowers skill pack from `obra/superpowers` alongside the local skills in `skills/`.
+After reinstalling or reloading pi, the Superpowers skills are available like any other pi skill.

@@ -3,7 +3,7 @@ import fs from "node:fs";
 import test from "node:test";
 
 const pkg = JSON.parse(fs.readFileSync(new URL("../package.json", import.meta.url), "utf8")) as {
-	pi?: { extensions?: unknown };
+	pi?: { extensions?: unknown; skills?: unknown };
 };
 
 test("package manifest points pi at concrete extension package directories and vendored packages", () => {
@@ -11,4 +11,8 @@ test("package manifest points pi at concrete extension package directories and v
 		"./extensions/guards",
 		"./extensions/pi-usage-extension",
 	]);
+});
+
+test("package manifest exposes the repository skills directory", () => {
+	assert.deepEqual(pkg.pi?.skills, ["./skills"]);
 });

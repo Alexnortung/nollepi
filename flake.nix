@@ -53,6 +53,7 @@
           cp ${upstreamPackageRoot}/CHANGELOG.md "$out/CHANGELOG.md"
           cp ${packagedManifest} "$out/package.json"
           cp -R ${./extensions}/* "$out/extensions/"
+          cp -R ${./skills} "$out/skills"
 
           for file in index.ts package.json README.md CHANGELOG.md LICENSE screenshot.png; do
             if [ ! -e ${usageExtensionSrc}/$file ]; then
