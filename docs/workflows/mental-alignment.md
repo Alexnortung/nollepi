@@ -91,11 +91,18 @@ These summaries are part of the source of truth for later work.
 
 Mental alignment should update and verify these summaries over time.
 
+This also applies to workflow/task/step markdown artifacts stored under `docs/.workflows/runs/`. Mental alignment should help create, refine, and verify those artifacts as the authoritative written form of the current understanding.
+
 ## Human Verification Pattern
 
 For each meaningful part, the agent should ask a question that lets the human confirm or deny that the part is aligned.
 
 This gives the human a clear checkpoint instead of assuming agreement.
+
+When the human edits a workflow/task/step artifact directly, that edit is itself a form of alignment input. The agent should reread the file and either:
+
+- reopen focused alignment if the human wants that, or
+- accept the edited file as source of truth if the human says no additional alignment is needed
 
 ## Workflow-Specific Depth
 

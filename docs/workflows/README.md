@@ -13,5 +13,6 @@ These documents capture the current product vision and behavioral rules before i
 - `autonomous.md` — Autonomous workflow
 - `mental-alignment.md` — mental alignment protocol
 - `task-lifecycle.md` — task, step, review, commit, and completion model
+- `artifacts.md` — live workflow/task/step markdown artifacts
 - `sidebar.md` — sidebar purpose and behavior
 - `orchestrator.md` — orchestrator and subagent model

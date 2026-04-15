@@ -51,6 +51,8 @@ Each task and step should include:
 
 Mental alignment is responsible for creating, refining, and verifying these artifacts.
 
+In practice, these artifacts should be stored as markdown files inside the workflow run directory under `docs/.workflows/runs/`.
+
 ## Task-List Creation in Alignment
 
 In `alignment`, the orchestrator should first create a **complete-looking provisional draft** of the task list.
@@ -94,7 +96,7 @@ A typical task lifecycle in `autonomous` is:
 6. commit
 7. continue automatically to the next step or task
 
-## Review and Human Edits
+## Review, Human Edits, and Task Artifacts
 
 In `alignment`:
 
@@ -102,6 +104,23 @@ In `alignment`:
 - the agent must take human review feedback seriously
 - if the human made manual edits, the agent must not change them unless the change is discussed and allowed
 - the agent may question a human edit, but if the human insists, it must be preserved
+
+The same principle applies to task and step markdown artifacts.
+
+If the human edits a task or step file:
+
+- the agent should reread it when told to do so
+- if the human says alignment is needed, the agent should reconcile understanding and ask focused questions
+- if the human says no alignment is needed, the file becomes the operative source of truth without reopening alignment
+
+## Commit Traceability
+
+Completed tasks should record commit hash(es) in both:
+
+- `workflow.md`
+- `task.md`
+
+This allows one task to point to multiple commits when the human or agent creates more than one commit for that task.
 
 ## Workflow Completion
 

@@ -80,5 +80,19 @@ These artifacts include:
 - step descriptions and summaries
 - approval status
 - workflow state
+- live workflow/task/step markdown files
 
 These artifacts should be detailed enough that a fresh agent can pick up a task or step and proceed without depending on the full prior conversation.
+
+## Live Workflow Artifact Storage
+
+Active workflow run artifacts should live under:
+
+```text
+docs/.workflows/runs/
+```
+
+This path is intentionally separate from the design docs in `docs/workflows/`.
+
+The design docs describe the system.
+The files under `docs/.workflows/runs/` represent the current operational source of truth for active workflow runs.
