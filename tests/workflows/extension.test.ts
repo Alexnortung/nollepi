@@ -131,3 +131,48 @@ test("workflow command refuses autonomous when sandbox unavailable", async () =>
 	await commands.get("workflow")?.handler("autonomous", ctx);
 	assert.match(notifications.at(-1) ?? "", /sandbox/i);
 });
+
+test("before_agent_start injects alignment instructions when alignment workflow is active", async () => {
+	const handlers = new Map<string, (event: any, ctx: any) => Promise<any>>();
+
+	const pi = {
+		registerCommand() {},
+		on(event: string, handler: (event: any, ctx: any) => Promise<any>) {
+			handlers.set(event, handler);
+		},
+		appendEntry() {},
+		events: { emit() {}, on() {} },
+	} as any;
+
+	workflowsExtension(
+		pi,
+		makeTestDeps({ activeRun: "/tmp/demo", summary: { workflow: "alignment", state: "task-execution", done: false } }),
+	);
+
+	const ctx = { hasUI: true, cwd: "/project", ui: { setWidget() {} }, sessionManager: { getBranch: () => [] } };
+	const result = await handlers.get("before_agent_start")?.({ systemPrompt: "Base prompt." }, ctx);
+
+	assert.ok(result?.systemPrompt?.includes("Active Workflow: alignment"));
+	assert.ok(result?.systemPrompt?.includes("task-execution"));
+	assert.ok(result?.systemPrompt?.includes("task.md"));
+});
+
+test("before_agent_start does not inject for base workflow", async () => {
+	const handlers = new Map<string, (event: any, ctx: any) => Promise<any>>();
+
+	const pi = {
+		registerCommand() {},
+		on(event: string, handler: (event: any, ctx: any) => Promise<any>) {
+			handlers.set(event, handler);
+		},
+		appendEntry() {},
+		events: { emit() {}, on() {} },
+	} as any;
+
+	workflowsExtension(pi, makeTestDeps({ activeRun: undefined }));
+
+	const ctx = { hasUI: true, cwd: "/project", ui: { setWidget() {} }, sessionManager: { getBranch: () => [] } };
+	const result = await handlers.get("before_agent_start")?.({ systemPrompt: "Base prompt." }, ctx);
+
+	assert.equal(result, undefined);
+});
