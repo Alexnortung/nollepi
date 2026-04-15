@@ -85,6 +85,10 @@ When it exists:
 - the ordered step list remains defined by `task.md`
 - the step file becomes the detailed source of truth for that specific step
 
+## Implementation note
+
+The first implementation lives in `extensions/workflows/` and derives durable workflow state from these markdown artifacts. Session persistence, when used, is only for derived UI/session convenience state.
+
 ## Source-of-Truth Rules
 
 These markdown artifacts are authoritative.

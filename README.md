@@ -69,6 +69,18 @@ If not, the bash guard reuses the path-guard approval prompt for that target aft
 
 Drop additional pi package directories into `extensions/` and reload pi.
 
+## Workflow control plane
+
+This package now includes a workflow-control-plane extension in `extensions/workflows/`.
+
+Live workflow-run artifacts live under:
+
+```text
+docs/.workflows/runs/
+```
+
+The extension is responsible for workflow switching, workflow status widgets, and the live workflow artifact model.
+
 ## Installed skill packs
 
 This package now bundles the Superpowers skill pack from `obra/superpowers` alongside the local skills in `skills/`.

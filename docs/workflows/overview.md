@@ -84,6 +84,10 @@ These artifacts include:
 
 These artifacts should be detailed enough that a fresh agent can pick up a task or step and proceed without depending on the full prior conversation.
 
+## Implementation note
+
+The first implementation lives in `extensions/workflows/` and derives durable workflow state from markdown workflow artifacts. Any session persistence is limited to derived UI/session convenience state.
+
 ## Live Workflow Artifact Storage
 
 Active workflow run artifacts should live under:
