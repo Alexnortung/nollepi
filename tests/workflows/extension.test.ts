@@ -176,3 +176,58 @@ test("before_agent_start does not inject for base workflow", async () => {
 
 	assert.equal(result, undefined);
 });
+
+test("tool_result refreshes sidebar when agent writes workflow.md", async () => {
+	const handlers = new Map<string, (event: any, ctx: any) => Promise<any>>();
+	const widgets: Array<{ key: string; lines: string[] }> = [];
+	let callCount = 0;
+
+	const pi = {
+		registerCommand() {},
+		on(event: string, handler: (event: any, ctx: any) => Promise<any>) {
+			handlers.set(event, handler);
+		},
+		appendEntry() {},
+		events: { emit() {}, on() {} },
+	} as any;
+
+	const deps = {
+		findActiveRun: async () => "/tmp/demo-run",
+		deriveWorkflowSummaryFromArtifacts: async (_dir: string): Promise<WorkflowRunSummary> => {
+			callCount++;
+			return {
+				workflow: "alignment" as const,
+				runDirectory: "/tmp/demo-run",
+				state: callCount === 1 ? "task-execution" : "human-review",
+				done: false,
+			};
+		},
+		switchWorkflow: async (): Promise<WorkflowRunSummary> => ({ workflow: "base" as const, state: "idle", done: true }),
+	};
+
+	workflowsExtension(pi, deps);
+
+	const ctx = {
+		hasUI: true,
+		cwd: "/project",
+		ui: { setWidget(key: string, lines: string[]) { widgets.push({ key, lines }); } },
+		sessionManager: { getBranch: () => [] },
+	};
+
+	await handlers.get("session_start")?.({}, ctx);
+
+	await handlers.get("tool_result")?.(
+		{
+			toolName: "write",
+			toolCallId: "tc1",
+			input: { path: "docs/.workflows/runs/2026-04-15-01-alignment-demo/workflow.md", content: "..." },
+			content: [{ type: "text", text: "Written" }],
+			isError: false,
+		},
+		ctx,
+	);
+
+	assert.equal(widgets.length, 2);
+	assert.equal(widgets[0]?.lines[1], "State: task-execution");
+	assert.equal(widgets[1]?.lines[1], "State: human-review");
+});
