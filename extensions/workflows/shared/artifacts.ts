@@ -1,3 +1,4 @@
+import { buildWorkflowRunSlug } from "./slug";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { renderTaskMarkdown, renderWorkflowMarkdown } from "./markdown";
@@ -37,16 +38,66 @@ export async function deriveWorkflowSummaryFromArtifacts(runDirectory: string): 
 	};
 }
 
-export async function findActiveRun(_cwd: string) {
+export async function findActiveRun(cwd: string): Promise<string | undefined> {
+	const runsDir = path.join(cwd, "docs", ".workflows", "runs");
+	let names: string[];
+	try {
+		const entries = await fs.readdir(runsDir, { withFileTypes: true });
+		names = entries
+			.filter((e) => e.isDirectory())
+			.map((e) => e.name)
+			.sort()
+			.reverse();
+	} catch {
+		return undefined;
+	}
+
+	for (const name of names) {
+		const runDir = path.join(runsDir, name);
+		try {
+			const summary = await deriveWorkflowSummaryFromArtifacts(runDir);
+			if (!summary.done) return runDir;
+		} catch {
+			continue;
+		}
+	}
 	return undefined;
 }
 
-export async function switchWorkflow(input: { cwd: string; workflow: WorkflowName }): Promise<WorkflowRunSummary> {
-	return {
+export async function switchWorkflow(input: {
+	cwd: string;
+	workflow: WorkflowName;
+	title?: string;
+}): Promise<WorkflowRunSummary> {
+	if (input.workflow === "base") {
+		return { workflow: "base", state: "idle", done: true };
+	}
+
+	const runsDir = path.join(input.cwd, "docs", ".workflows", "runs");
+	await fs.mkdir(runsDir, { recursive: true });
+
+	let index = 1;
+	try {
+		index = (await fs.readdir(runsDir)).length + 1;
+	} catch {}
+
+	const date = new Date().toISOString().slice(0, 10);
+	const slug = buildWorkflowRunSlug({
+		date,
+		index,
 		workflow: input.workflow,
-		state: input.workflow === "base" ? "idle" : "intake",
-		done: input.workflow === "base",
-	};
+		title: input.title ?? input.workflow,
+	});
+	const runDirectory = path.join(runsDir, slug);
+
+	await createWorkflowArtifacts({
+		runDirectory,
+		workflow: input.workflow,
+		title: input.title ?? `${input.workflow} workflow`,
+		tasks: [],
+	});
+
+	return { workflow: input.workflow, runDirectory, state: "intake", done: false };
 }
 
 export async function syncTaskCommits(runDirectory: string, taskId: string, commits: string[]) {
