@@ -28,6 +28,41 @@
         "aarch64-darwin"
       ];
       forAllSystems = nixpkgs.lib.genAttrs systems;
+      mkPiPackage =
+        pkgs: upstreamPi:
+        let
+          upstreamPackageRoot = "${upstreamPi}/lib/node_modules/@mariozechner/pi-coding-agent";
+          usageExtensionSrc = inputs."pi-usage-extension" + "/usage-extension";
+          localPackage = builtins.fromJSON (builtins.readFile ./package.json);
+          upstreamPackage = builtins.fromJSON (builtins.readFile "${upstreamPackageRoot}/package.json");
+          packagedManifest = pkgs.writeText "nollepi-package.json" (
+            builtins.toJSON (
+              localPackage
+              // {
+                version = upstreamPackage.version;
+              }
+            )
+          );
+        in
+        pkgs.runCommand "nollepi-pi-package" { } ''
+          mkdir -p "$out/extensions/pi-usage-extension"
+          cp -R ${upstreamPackageRoot}/dist "$out/"
+          cp -R ${upstreamPackageRoot}/docs "$out/"
+          cp -R ${upstreamPackageRoot}/examples "$out/"
+          cp ${upstreamPackageRoot}/README.md "$out/README.md"
+          cp ${upstreamPackageRoot}/CHANGELOG.md "$out/CHANGELOG.md"
+          cp ${packagedManifest} "$out/package.json"
+          cp -R ${./extensions}/* "$out/extensions/"
+
+          for file in index.ts package.json README.md CHANGELOG.md LICENSE screenshot.png; do
+            if [ ! -e ${usageExtensionSrc}/$file ]; then
+              echo "Missing expected pi-usage-extension file: $file" >&2
+              exit 1
+            fi
+          done
+
+          cp -r ${usageExtensionSrc} "$out/extensions/pi-usage-extension/"
+        '';
     in
     {
       packages = forAllSystems (
@@ -35,30 +70,9 @@
         let
           pkgs = nixpkgs.legacyPackages.${system};
           upstreamPi = llm-agents.packages.${system}.pi;
-          upstreamPackageRoot = "${upstreamPi}/lib/node_modules/@mariozechner/pi-coding-agent";
-          usageExtensionSrc = inputs."pi-usage-extension" + "/usage-extension";
-          piPackageDir = pkgs.runCommand "nollepi-pi-package" { } ''
-            mkdir -p "$out/extensions/pi-usage-extension"
-            cp -R ${upstreamPackageRoot}/dist "$out/"
-            cp -R ${upstreamPackageRoot}/docs "$out/"
-            cp -R ${upstreamPackageRoot}/examples "$out/"
-            cp ${upstreamPackageRoot}/README.md "$out/README.md"
-            cp ${upstreamPackageRoot}/CHANGELOG.md "$out/CHANGELOG.md"
-            cp ${./package.json} "$out/package.json"
-            cp -R ${./extensions}/* "$out/extensions/"
-
-            for file in index.ts package.json README.md CHANGELOG.md LICENSE screenshot.png; do
-              if [ ! -e ${usageExtensionSrc}/$file ]; then
-                echo "Missing expected pi-usage-extension file: $file" >&2
-                exit 1
-              fi
-            done
-
-            cp -r ${usageExtensionSrc} "$out/extensions/pi-usage-extension/"
-          '';
         in
         {
-          default = piPackageDir;
+          default = mkPiPackage pkgs upstreamPi;
         }
       );
 
@@ -67,7 +81,7 @@
         let
           pkgs = nixpkgs.legacyPackages.${system};
           upstreamPi = llm-agents.packages.${system}.pi;
-          piPackageDir = self.packages.${system}.default;
+          piPackageDir = mkPiPackage pkgs upstreamPi;
           runPi = pkgs.writeShellApplication {
             name = "nollepi";
             runtimeInputs = [ upstreamPi ];
@@ -77,9 +91,7 @@
               exec ${upstreamPi}/bin/pi \
                 --no-extensions \
                 --extension ${piPackageDir} \
-                --no-skills \
                 --skill ${./skills} \
-                --skill "$PWD/.agents/skills/" \
                 "$@"
             '';
           };
