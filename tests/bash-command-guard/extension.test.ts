@@ -31,9 +31,31 @@ function registerGuard() {
 		on(event: string, handler: any) {
 			if (event === "tool_call") toolCallHandler = handler;
 		},
+		events: { on() {}, emit() {} },
 	} as any;
 	bashCommandGuard(pi);
 	return toolCallHandler;
+}
+
+function registerGuardWithEventBus() {
+	let toolCallHandler: any;
+	const listeners = new Map<string, Array<(data: any) => void>>();
+	const pi = {
+		on(event: string, handler: any) {
+			if (event === "tool_call") toolCallHandler = handler;
+		},
+		events: {
+			on(event: string, cb: (data: any) => void) {
+				if (!listeners.has(event)) listeners.set(event, []);
+				listeners.get(event)!.push(cb);
+			},
+			emit(event: string, data: any) {
+				listeners.get(event)?.forEach((cb) => cb(data));
+			},
+		},
+	} as any;
+	bashCommandGuard(pi);
+	return { toolCallHandler, events: pi.events };
 }
 
 test("blocks unknown bash commands when no UI is available", async () => {
@@ -223,6 +245,33 @@ test("denying a redirection path blocks the full command", async () => {
 				notify() {},
 			},
 		},
+	);
+
+	assert.deepEqual(result, { block: true, reason: "Blocked by user" });
+});
+
+test("bash guard allows all commands after workflow:switched autonomous is emitted", async () => {
+	const { toolCallHandler, events } = registerGuardWithEventBus();
+
+	events.emit("workflow:switched", { workflow: "autonomous" });
+
+	const result = await toolCallHandler(
+		{ toolName: "bash", input: { command: "rm -rf /tmp/sandbox-dir" } },
+		{ hasUI: true, cwd: "/project", ui: { async select() { return "Deny"; } } },
+	);
+
+	assert.equal(result, undefined);
+});
+
+test("bash guard resumes prompting after workflow:switched back to alignment", async () => {
+	const { toolCallHandler, events } = registerGuardWithEventBus();
+
+	events.emit("workflow:switched", { workflow: "autonomous" });
+	events.emit("workflow:switched", { workflow: "alignment" });
+
+	const result = await toolCallHandler(
+		{ toolName: "bash", input: { command: "rm -rf /tmp/sandbox-dir" } },
+		{ hasUI: false, cwd: "/project", ui: {} },
 	);
 
 	assert.deepEqual(result, { block: true, reason: "Blocked by user" });

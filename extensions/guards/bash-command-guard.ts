@@ -5,7 +5,14 @@ import { choosePrefixSpan, evaluateCommandPolicy } from "./bash-command-guard/en
 import { extractRedirectionTargets } from "./bash-command-guard/policy";
 
 export default function (pi: ExtensionAPI) {
+	let commandGuardEnabled = true;
+
+	pi.events.on("workflow:switched", ({ workflow }: { workflow: string }) => {
+		commandGuardEnabled = workflow !== "autonomous";
+	});
+
 	pi.on("tool_call", async (event, ctx) => {
+		if (!commandGuardEnabled) return undefined;
 		if (event.toolName !== "bash") return undefined;
 		const { input } = event as BashToolCallEvent;
 

@@ -207,5 +207,14 @@ export async function maybePromptForAccess(
 }
 
 export default function (pi: ExtensionAPI) {
-	pi.on("tool_call", async (event, ctx) => maybePromptForAccess(event, ctx));
+	let pathGuardEnabled = true;
+
+	pi.events.on("workflow:switched", ({ workflow }: { workflow: string }) => {
+		pathGuardEnabled = workflow !== "autonomous";
+	});
+
+	pi.on("tool_call", async (event, ctx) => {
+		if (!pathGuardEnabled) return undefined;
+		return maybePromptForAccess(event, ctx);
+	});
 }

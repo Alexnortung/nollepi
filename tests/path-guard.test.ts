@@ -188,3 +188,39 @@ test("promptPathAccess saves file approval when requested", async () => {
 	assert.equal(result, true);
 	assert.deepEqual(saved.files, ["/tmp/out.log"]);
 });
+
+test("path guard allows any path after workflow:switched autonomous is emitted", async () => {
+	const listeners = new Map<string, Array<(data: any) => void>>();
+	let toolCallHandler: any;
+
+	const pi = {
+		on(event: string, handler: any) {
+			if (event === "tool_call") toolCallHandler = handler;
+		},
+		events: {
+			on(event: string, cb: (data: any) => void) {
+				if (!listeners.has(event)) listeners.set(event, []);
+				listeners.get(event)!.push(cb);
+			},
+			emit(event: string, data: any) {
+				listeners.get(event)?.forEach((cb) => cb(data));
+			},
+		},
+	} as any;
+
+	const { default: pathGuardDefault } = await import("../extensions/guards/path-guard.ts");
+	pathGuardDefault(pi);
+
+	pi.events.emit("workflow:switched", { workflow: "autonomous" });
+
+	const result = await toolCallHandler(
+		{ toolName: "write", input: { path: "/arbitrary/outside/cwd/file.ts" } },
+		{
+			hasUI: true,
+			cwd: "/project",
+			ui: { async select() { return "Deny"; }, notify() {} },
+		},
+	);
+
+	assert.equal(result, undefined);
+});
