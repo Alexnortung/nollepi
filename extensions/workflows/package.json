@@ -1,0 +1,13 @@
+{
+	"name": "nollepi-workflows",
+	"version": "0.0.0",
+	"type": "module",
+	"keywords": [
+		"pi-package"
+	],
+	"pi": {
+		"extensions": [
+			"./index.ts"
+		]
+	}
+}
