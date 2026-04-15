@@ -1,6 +1,6 @@
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { deriveWorkflowSummaryFromArtifacts, findActiveRun, switchWorkflow } from "./shared/artifacts";
-import { canSwitchWorkflow } from "./shared/policies";
+import { canStartWorkflow, canSwitchWorkflow } from "./shared/policies";
 import { restoreUiStateFromBranch } from "./shared/session";
 import { renderWorkflowWidget } from "./shared/sidebar";
 import type { WorkflowName, WorkflowRunSummary } from "./shared/types";
@@ -45,6 +45,18 @@ export default function (pi: ExtensionAPI) {
 
 			if (!canSwitchWorkflow({ currentWorkflow: currentSummary.workflow, done: currentSummary.done })) {
 				ctx.ui.notify(`Cannot switch from ${currentSummary.workflow} until it is done.`, "error");
+				setWidget(ctx as any, currentSummary);
+				return;
+			}
+
+			const preflight = canStartWorkflow({
+				workflow: nextWorkflow,
+				sandboxAvailable: Boolean((ctx as any).sandboxAvailable ?? false),
+				worktreeReady: Boolean((ctx as any).worktreeReady ?? false),
+			});
+
+			if (!preflight.ok) {
+				ctx.ui.notify(`${preflight.reason} Fallback options: alignment or base.`, "error");
 				setWidget(ctx as any, currentSummary);
 				return;
 			}

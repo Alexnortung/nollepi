@@ -53,3 +53,45 @@ test("workflow command restores widget from artifacts and blocks switching from 
 
 	assert.deepEqual(widgets.at(-1)?.lines, ["Workflow: alignment", "State: task-execution"]);
 });
+
+test("workflow command refuses autonomous when sandbox is unavailable", async () => {
+	const commands = new Map<string, { handler: (args: string, ctx: any) => Promise<void> }>();
+	const notifications: string[] = [];
+	const pi = {
+		registerCommand(name: string, options: { handler: (args: string, ctx: any) => Promise<void> }) {
+			commands.set(name, options);
+		},
+		on() {},
+		appendEntry() {},
+	} as any;
+
+	workflowsExtension(pi);
+
+	const ctx = {
+		hasUI: true,
+		ui: {
+			setWidget() {},
+			notify(message: string) {
+				notifications.push(message);
+			},
+		},
+		sessionManager: {
+			getBranch() {
+				return [];
+			},
+		},
+		workflowArtifacts: {
+			findActiveRun: async () => undefined,
+			deriveWorkflowSummaryFromArtifacts: async () => ({ workflow: "base", state: "idle", done: true }),
+			switchWorkflow: async () => {
+				throw new Error("should not switch when autonomous preflight fails");
+			},
+		},
+		sandboxAvailable: false,
+		worktreeReady: true,
+	};
+
+	await commands.get("workflow")?.handler("autonomous", ctx);
+
+	assert.match(notifications.at(-1) ?? "", /sandbox/i);
+});
