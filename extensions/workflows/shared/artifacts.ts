@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { renderTaskMarkdown, renderWorkflowMarkdown } from "./markdown";
-import type { WorkflowRunSummary } from "./types";
+import type { WorkflowName, WorkflowRunSummary } from "./types";
 
 export async function createWorkflowArtifacts(input: {
 	runDirectory: string;
@@ -34,6 +34,18 @@ export async function deriveWorkflowSummaryFromArtifacts(runDirectory: string): 
 		runDirectory,
 		state,
 		done,
+	};
+}
+
+export async function findActiveRun(_cwd: string) {
+	return undefined;
+}
+
+export async function switchWorkflow(input: { cwd: string; workflow: WorkflowName }): Promise<WorkflowRunSummary> {
+	return {
+		workflow: input.workflow,
+		state: input.workflow === "base" ? "idle" : "intake",
+		done: input.workflow === "base",
 	};
 }
 
