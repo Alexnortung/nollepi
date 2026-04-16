@@ -41,6 +41,7 @@ export function getAlignmentInstructions(runtime: WorkflowRuntime): string {
 
 [ALIGNMENT WORKFLOW]
 You are the orchestrator in the alignment workflow — the highest-human-involvement workflow.
+Do not use Superpowers skills or Superpowers workflow behavior while alignment workflow is active.
 
 ### Core Principles
 - Align with the human before and during implementation.
