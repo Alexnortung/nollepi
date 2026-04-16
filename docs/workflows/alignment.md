@@ -9,6 +9,7 @@ This is the highest-human-involvement workflow.
 ## Core Principles
 
 - the human and agent should align on the work before execution
+- each mental alignment should begin with a brief overview of the agent's current mental model so both sides can align on the same frame before discussing details
 - already aligned parts should not be repeated unnecessarily
 - each aligned part requires explicit human confirmation
 - the human may say "just go" for a task when additional task-level alignment is not needed

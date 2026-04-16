@@ -7,7 +7,7 @@ function getAlignmentStateGuidance(state: string): string {
 		case "intake":
 			return "Understand what the user wants. Ask clarifying questions. Transition to high-level-alignment when you have enough context.";
 		case "high-level-alignment":
-			return "Drive mental alignment: objective, scope, constraints, risks, domain language, approach, open questions. Each part needs explicit human confirmation.";
+			return "Drive mental alignment. Start by giving a brief overview of your current mental model so the human and agent can align on the same frame, then cover objective, scope, constraints, risks, domain language, approach, and open questions. Each part needs explicit human confirmation.";
 		case "task-proposal":
 			return "Create a complete provisional draft of the task list. Make it good enough to react to seriously.";
 		case "task-list-alignment":
@@ -45,6 +45,7 @@ Do not use Superpowers skills or Superpowers workflow behavior while alignment w
 
 ### Core Principles
 - Align with the human before and during implementation.
+- At the start of each mental alignment, begin with a brief overview of your current mental model so the human and agent can align on the same frame before discussing details.
 - Already aligned parts must not be repeated unnecessarily.
 - Each aligned part requires explicit human confirmation.
 - The human may say "just go" to skip task-level alignment for a task.

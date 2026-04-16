@@ -27,6 +27,7 @@ describe("buildWorkflowPrompt", () => {
 		assert.ok(prompt.includes("[ALIGNMENT WORKFLOW]"));
 		assert.ok(prompt.includes("intake"));
 		assert.match(prompt, /do not use superpowers/i);
+		assert.match(prompt, /begin with a brief overview of your current mental model/i);
 	});
 
 	it("returns autonomous instructions for autonomous workflow", () => {
