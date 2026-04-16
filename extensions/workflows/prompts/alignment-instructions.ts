@@ -17,9 +17,9 @@ function getAlignmentStateGuidance(state: string): string {
 		case "task-alignment":
 			return "Align on the current task before execution. The human may say 'just go' to skip this.";
 		case "task-execution":
-			return "Execute the current task. Follow the task description and agreed details.";
+			return "Execute the current task. If repo facts are missing, dispatch an investigator. If the task is aligned strongly enough, dispatch a builder. Do not dispatch a builder while material alignment questions remain.";
 		case "internal-review":
-			return "Review the task work before presenting to the human. Check against task description and quality bar.";
+			return "Review the task work before presenting to the human. Dispatch a reviewer after implementation exists to check against the task description and aligned constraints.";
 		case "human-review":
 			return "Present results. Take human feedback seriously. Protect human manual edits.";
 		case "approved":
@@ -59,7 +59,7 @@ ${getAlignmentStateGuidance(runtime.workflowState)}
 ### Tools Available
 - workflow_state — inspect current workflow state
 - workflow_switch — switch workflows (only in idle/finish state)
-- Use alignment_part, task_manage, step_manage, task_commit tools when they become available.
+- Use alignment_manage, task_manage, step_manage, task_commit, and dispatch_subagent tools when they become available.
 
 ### Artifacts
 Maintain workflow artifacts under docs/.workflows/runs/. These are the source of truth.`;

@@ -13,9 +13,9 @@ function getAutonomousStateGuidance(state: string): string {
 		case "planning":
 			return "Create a plan. Structure tasks and steps.";
 		case "task-execution":
-			return "Execute the current task. You have full authority to make changes.";
+			return "Execute the current task. Dispatch an investigator when repo understanding is missing. Dispatch a builder to implement the active task when the task packet is ready.";
 		case "self-review":
-			return "Review your own work. Optionally dispatch a reviewer subagent.";
+			return "Review your own work. Dispatch a reviewer after implementation exists if an independent check would help.";
 		case "verification":
 			return "Run tests, lints, type checks. Verify the work is correct.";
 		case "commit":

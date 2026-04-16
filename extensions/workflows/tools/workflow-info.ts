@@ -1,6 +1,7 @@
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
 import type { AlignmentState } from "../state/alignment-state.ts";
+import type { SubagentState } from "../state/subagent-state.ts";
 import type { TaskState } from "../state/task-state.ts";
 import type { WorkflowRuntime } from "../state/workflow-state.ts";
 
@@ -9,6 +10,7 @@ export function registerWorkflowStateTool(
 	getRuntime: () => WorkflowRuntime,
 	getTaskState?: () => TaskState,
 	getAlignmentState?: () => AlignmentState,
+	getSubagentState?: () => SubagentState,
 ): void {
 	pi.registerTool({
 		name: "workflow_state",
@@ -22,6 +24,7 @@ export function registerWorkflowStateTool(
 			const runtime = getRuntime();
 			const taskState = getTaskState?.();
 			const alignState = getAlignmentState?.();
+			const subagentState = getSubagentState?.();
 			const active = taskState?.getActiveTaskContext();
 			const alignSummary = alignState?.getSummary();
 			const result = {
@@ -36,6 +39,8 @@ export function registerWorkflowStateTool(
 				currentTask: active?.currentTask ?? null,
 				currentStep: active?.currentStep ?? null,
 				alignment: alignSummary ?? null,
+				subagents: subagentState?.runs ?? [],
+				activeSubagents: subagentState?.getActiveRuns() ?? [],
 			};
 
 			return {
