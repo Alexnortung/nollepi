@@ -45,4 +45,31 @@ Commit-worthy change
 		assert.equal(parsed.steps.length, 2);
 		assert.equal(parsed.steps[1].artifactPath, "step-2-update-callers.md");
 	});
+
+	it("reads numbered steps only from steps section", () => {
+		const markdown = `# Update domain types
+
+- Task id: 01-update-domain-types
+- Status: approved
+- Alignment needed: true
+- Commits: abc123
+
+## Description
+Commit-worthy change
+1. [not-a-step] Numbered line in description
+
+## Steps
+1. [pending] Change exported types
+2. [done] Update callers (step-2-update-callers.md)
+
+## Notes
+1. [not-a-step] Numbered note link
+2. [also-not-a-step] Another numbered note
+`;
+
+		const parsed = parseTaskMd(markdown);
+		assert.equal(parsed.steps.length, 2);
+		assert.equal(parsed.steps[0].summary, "Change exported types");
+		assert.equal(parsed.steps[1].summary, "Update callers");
+	});
 });
