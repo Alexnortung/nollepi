@@ -12,6 +12,7 @@ It is not just a workflow. It is a reusable protocol that can appear:
 
 ## Core Rules
 
+- each mental alignment should begin with a brief overview of the agent's current mental model so the human and agent can align on the same frame before discussing detailed parts
 - do not repeat parts that are already aligned
 - each part only becomes aligned when the human explicitly confirms it
 - the human may say a part is not aligned
@@ -94,6 +95,10 @@ Mental alignment should update and verify these summaries over time.
 This also applies to workflow/task/step markdown artifacts stored under `docs/.workflows/runs/`. Mental alignment should help create, refine, and verify those artifacts as the authoritative written form of the current understanding.
 
 ## Human Verification Pattern
+
+The agent should first summarize its current mental model of the work in a brief overview.
+
+That overview should describe the frame the agent is using before it asks the human to align on detailed parts.
 
 For each meaningful part, the agent should ask a question that lets the human confirm or deny that the part is aligned.
 
