@@ -1,7 +1,155 @@
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import { MtimeTracker } from "./artifacts/mtime-tracker.ts";
+import { buildWorkflowPrompt } from "./prompts/prompt-builder.ts";
+import { restoreState, serializeState, type WorkflowExtensionState } from "./state/persistence.ts";
+import {
+	createWorkflowRuntime,
+	type WorkflowName,
+	type WorkflowRuntime,
+} from "./state/workflow-state.ts";
+import { registerWorkflowStateTool } from "./tools/workflow-info.ts";
+import { registerWorkflowSwitchTool } from "./tools/workflow-switch.ts";
+import { registerWorkflowTransitionTool } from "./tools/workflow-transition.ts";
+import { getToolsForWorkflow } from "./tools/tool-sets.ts";
+
+const CUSTOM_ENTRY_TYPE = "workflow-state";
 
 export default function workflowExtension(pi: ExtensionAPI): void {
+	let runtime: WorkflowRuntime = createWorkflowRuntime();
+	const mtimeTracker = new MtimeTracker();
+
+	function persistState(): void {
+		pi.appendEntry(CUSTOM_ENTRY_TYPE, serializeState(runtime, mtimeTracker.toMap()));
+	}
+
+	function applyToolSet(): void {
+		pi.setActiveTools(getToolsForWorkflow(runtime.activeWorkflow, runtime.workflowState));
+	}
+
+	function updateStatus(ctx: Parameters<Parameters<ExtensionAPI["on"]>[1]>[1]): void {
+		if (!ctx.hasUI) return;
+		ctx.ui.setStatus(
+			"workflow",
+			ctx.ui.theme.fg("accent", `⚙ ${runtime.activeWorkflow}`) +
+				(runtime.workflowState !== "idle" ? ctx.ui.theme.fg("muted", `:${runtime.workflowState}`) : ""),
+		);
+	}
+
+	function handleSwitch(_newWorkflow: WorkflowName): void {
+		applyToolSet();
+		persistState();
+	}
+
+	registerWorkflowStateTool(pi, () => runtime);
+	registerWorkflowSwitchTool(pi, () => runtime, handleSwitch);
+	registerWorkflowTransitionTool(pi, () => runtime, () => {
+		applyToolSet();
+		persistState();
+	});
+
+	pi.registerCommand("workflow", {
+		description: "Show or change workflow: /workflow [base|superpowers|alignment|autonomous]",
+		handler: async (args, ctx) => {
+			const trimmed = args.trim().toLowerCase();
+			if (!trimmed) {
+				if (ctx.hasUI) {
+					ctx.ui.notify(
+						`Workflow: ${runtime.activeWorkflow} (state: ${runtime.workflowState})` +
+							(runtime.runId ? `\nRun: ${runtime.runId}` : "") +
+							`\nCan switch: ${runtime.canSwitch()}`,
+						"info",
+					);
+				}
+				return;
+			}
+
+			const validWorkflows: WorkflowName[] = ["base", "superpowers", "alignment", "autonomous"];
+			if (!validWorkflows.includes(trimmed as WorkflowName)) {
+				if (ctx.hasUI) {
+					ctx.ui.notify(`Invalid workflow: ${trimmed}. Options: ${validWorkflows.join(", ")}`, "error");
+				}
+				return;
+			}
+
+			const target = trimmed as WorkflowName;
+			if (target === runtime.activeWorkflow) {
+				if (ctx.hasUI) ctx.ui.notify(`Already in ${target} workflow`, "info");
+				return;
+			}
+
+			if (!runtime.canSwitch()) {
+				if (ctx.hasUI) {
+					ctx.ui.notify(
+						`Cannot switch from ${runtime.activeWorkflow} (state: ${runtime.workflowState}). Finish the current workflow first.`,
+						"warning",
+					);
+				}
+				return;
+			}
+
+			runtime.switchTo(target);
+			handleSwitch(target);
+			updateStatus(ctx);
+			if (ctx.hasUI) ctx.ui.notify(`Switched to ${target} workflow`, "info");
+		},
+	});
+
+	pi.registerCommand("reread", {
+		description: "Re-read workflow artifacts and update runtime state from disk",
+		handler: async (_args, ctx) => {
+			if (!runtime.runId) {
+				if (ctx.hasUI) ctx.ui.notify("No active workflow run to re-read.", "info");
+				return;
+			}
+
+			const changed = await mtimeTracker.checkForChanges();
+			if (changed.length === 0) {
+				if (ctx.hasUI) ctx.ui.notify("No artifact changes detected.", "info");
+			} else {
+				if (ctx.hasUI) {
+					ctx.ui.notify(
+						`Detected changes in ${changed.length} file(s):\n${changed.map((f) => `  ${f}`).join("\n")}`,
+						"info",
+					);
+				}
+				persistState();
+			}
+		},
+	});
+
 	pi.on("session_start", async (_event, ctx) => {
-		ctx.ui.notify("Workflow extension loaded", "info");
+		const entries = ctx.sessionManager.getEntries();
+		const lastEntry = entries
+			.filter((entry: { type: string; customType?: string }) => entry.type === "custom" && entry.customType === CUSTOM_ENTRY_TYPE)
+			.pop() as { data?: WorkflowExtensionState } | undefined;
+
+		const restored = restoreState(lastEntry?.data);
+		runtime = restored.runtime;
+		mtimeTracker.restoreFromMap(restored.artifactMtimes);
+
+		applyToolSet();
+		updateStatus(ctx);
+		if (ctx.hasUI) ctx.ui.notify("Workflow extension loaded", "info");
+	});
+
+	pi.on("before_agent_start", async (event) => {
+		const changed = await mtimeTracker.checkForChanges();
+		let changeNotice = "";
+		if (changed.length > 0) {
+			changeNotice =
+				"\n\n## Artifact Changes Detected\n" +
+				"The following workflow artifacts were modified since the last turn:\n" +
+				changed.map((filePath) => `- ${filePath}`).join("\n") +
+				"\nConsider using /reread or re-reading these files to update your understanding.";
+			persistState();
+		}
+
+		return {
+			systemPrompt: `${event.systemPrompt}\n\n${buildWorkflowPrompt(runtime)}${changeNotice}`,
+		};
+	});
+
+	pi.on("turn_end", async (_event, ctx) => {
+		updateStatus(ctx);
 	});
 }

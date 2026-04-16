@@ -1,7 +1,7 @@
 import type { WorkflowName } from "../state/workflow-state.ts";
 
 const BUILTIN_TOOLS = ["read", "bash", "edit", "write", "grep", "find", "ls"];
-const WORKFLOW_CORE_TOOLS = ["workflow_switch", "workflow_state"];
+const WORKFLOW_CORE_TOOLS = ["workflow_switch", "workflow_state", "workflow_transition"];
 
 const WORKFLOW_TOOL_SETS: Record<WorkflowName, string[]> = {
 	base: [...BUILTIN_TOOLS, ...WORKFLOW_CORE_TOOLS],
