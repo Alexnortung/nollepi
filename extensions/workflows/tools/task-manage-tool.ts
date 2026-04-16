@@ -1,7 +1,7 @@
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
 import { TaskState } from "../state/task-state.ts";
-import { applyTaskAction } from "./task-manage.ts";
+import { applyTaskAction, type TaskAction } from "./task-manage.ts";
 
 export const taskManageSchema = Type.Object({
 	action: Type.String({ description: "One of: create, update, split, merge, select" }),
@@ -35,7 +35,7 @@ export function registerTaskManageTool(
 		parameters: taskManageSchema,
 		async execute(_toolCallId, params) {
 			const state = getTaskState();
-			applyTaskAction(state, params);
+			applyTaskAction(state, params as TaskAction);
 			onChange();
 			const active = state.getActiveTaskContext();
 			return {

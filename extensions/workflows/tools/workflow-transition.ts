@@ -27,12 +27,13 @@ export function registerWorkflowTransitionTool(
 
 			try {
 				runtime.transition(params.state);
-			} catch (error: any) {
+			} catch (error: unknown) {
+				const message = error instanceof Error ? error.message : String(error);
 				return {
-					content: [{ type: "text", text: `Transition failed: ${error.message}` }],
+					content: [{ type: "text", text: `Transition failed: ${message}` }],
 					details: {
 						transitioned: false,
-						error: error.message,
+						error: message,
 						currentState: runtime.workflowState,
 						validTransitions: runtime.getValidTransitions(),
 					},

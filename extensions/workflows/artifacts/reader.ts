@@ -1,7 +1,20 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { getTaskMdPath, getWorkflowMdPath } from "./paths.ts";
-import { TaskState } from "../state/task-state.ts";
+import { TaskState, type TaskStatus, type StepStatus } from "../state/task-state.ts";
+
+const VALID_TASK_STATUSES: ReadonlySet<string> = new Set<TaskStatus>(["proposed", "approved", "in-progress", "review", "approved-complete", "committed"]);
+const VALID_STEP_STATUSES: ReadonlySet<string> = new Set<StepStatus>(["pending", "in-progress", "done"]);
+
+function toTaskStatus(s: string): TaskStatus {
+	if (VALID_TASK_STATUSES.has(s)) return s as TaskStatus;
+	return "proposed";
+}
+
+function toStepStatus(s: string): StepStatus {
+	if (VALID_STEP_STATUSES.has(s)) return s as StepStatus;
+	return "pending";
+}
 
 export function parseWorkflowMd(markdown: string): {
 	workflowType: string;
@@ -106,12 +119,12 @@ export async function readTaskStateFromArtifacts(
 			id: parsedTask.id,
 			summary: workflowTask.summary,
 			description: parsedTask.description,
-			status: parsedTask.status as any,
+			status: toTaskStatus(parsedTask.status),
 			steps: parsedTask.steps.map((step, index) => ({
 				id: `step-${index + 1}`,
 				summary: step.summary,
 				description: "",
-				status: step.status as any,
+				status: toStepStatus(step.status),
 				hasArtifact: Boolean(step.artifactPath),
 				artifactPath: step.artifactPath,
 			})),

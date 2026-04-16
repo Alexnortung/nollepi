@@ -1,7 +1,7 @@
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
 import { TaskState } from "../state/task-state.ts";
-import { applyStepAction } from "./step-manage.ts";
+import { applyStepAction, type StepAction } from "./step-manage.ts";
 
 export const stepManageSchema = Type.Object({
 	action: Type.String({ description: "One of: create, update, complete" }),
@@ -27,7 +27,7 @@ export function registerStepManageTool(
 		parameters: stepManageSchema,
 		async execute(_toolCallId, params) {
 			const state = getTaskState();
-			applyStepAction(state, params);
+			applyStepAction(state, params as StepAction);
 			onChange();
 			const active = state.getActiveTaskContext();
 			return {

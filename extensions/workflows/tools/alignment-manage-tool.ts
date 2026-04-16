@@ -1,7 +1,7 @@
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
 import { AlignmentState } from "../state/alignment-state.ts";
-import { applyAlignmentAction } from "./alignment-manage.ts";
+import { applyAlignmentAction, type AlignmentAction } from "./alignment-manage.ts";
 
 export const alignmentManageSchema = Type.Object({
 	action: Type.String({
@@ -34,7 +34,7 @@ export function registerAlignmentManageTool(
 		parameters: alignmentManageSchema,
 		async execute(_toolCallId, params) {
 			const state = getAlignmentState();
-			applyAlignmentAction(state, params);
+			applyAlignmentAction(state, params as AlignmentAction);
 			onChange();
 			const summary = state.getSummary();
 			return {
