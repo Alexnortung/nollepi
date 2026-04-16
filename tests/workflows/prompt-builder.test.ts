@@ -9,6 +9,7 @@ describe("buildWorkflowPrompt", () => {
 		const prompt = buildWorkflowPrompt(runtime);
 		assert.ok(prompt.includes("base"));
 		assert.ok(!prompt.includes("[ALIGNMENT WORKFLOW]"));
+		assert.match(prompt, /do not use superpowers/i);
 	});
 
 	it("returns superpowers instructions for superpowers workflow", () => {
@@ -25,6 +26,7 @@ describe("buildWorkflowPrompt", () => {
 		const prompt = buildWorkflowPrompt(runtime);
 		assert.ok(prompt.includes("[ALIGNMENT WORKFLOW]"));
 		assert.ok(prompt.includes("intake"));
+		assert.match(prompt, /do not use superpowers/i);
 	});
 
 	it("returns autonomous instructions for autonomous workflow", () => {
@@ -34,5 +36,6 @@ describe("buildWorkflowPrompt", () => {
 		const prompt = buildWorkflowPrompt(runtime);
 		assert.ok(prompt.includes("[AUTONOMOUS WORKFLOW]"));
 		assert.ok(prompt.includes("intake"));
+		assert.match(prompt, /do not use superpowers/i);
 	});
 });

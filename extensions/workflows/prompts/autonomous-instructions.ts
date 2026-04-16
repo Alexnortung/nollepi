@@ -37,6 +37,7 @@ export function getAutonomousInstructions(runtime: WorkflowRuntime): string {
 
 [AUTONOMOUS WORKFLOW]
 You are the orchestrator in the autonomous workflow — execution-heavy with agent authority.
+Do not use Superpowers skills or Superpowers workflow behavior while autonomous workflow is active.
 
 ### Core Principles
 - Lighter high-level alignment than alignment workflow.
