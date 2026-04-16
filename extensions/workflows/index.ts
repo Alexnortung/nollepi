@@ -5,12 +5,14 @@ import { writeWorkflowArtifacts } from "./artifacts/writer.ts";
 import { getTaskMdPath, getWorkflowMdPath } from "./artifacts/paths.ts";
 import { buildWorkflowPrompt } from "./prompts/prompt-builder.ts";
 import { restoreState, serializeState, type WorkflowExtensionState } from "./state/persistence.ts";
+import { AlignmentState } from "./state/alignment-state.ts";
 import { TaskState } from "./state/task-state.ts";
 import {
 	createWorkflowRuntime,
 	type WorkflowName,
 	type WorkflowRuntime,
 } from "./state/workflow-state.ts";
+import { registerAlignmentManageTool } from "./tools/alignment-manage-tool.ts";
 import { registerTaskCommitTool } from "./tools/task-commit-tool.ts";
 import { registerWorkflowStateTool } from "./tools/workflow-info.ts";
 import { registerWorkflowSwitchTool } from "./tools/workflow-switch.ts";
@@ -24,10 +26,11 @@ const CUSTOM_ENTRY_TYPE = "workflow-state";
 export default function workflowExtension(pi: ExtensionAPI): void {
 	let runtime: WorkflowRuntime = createWorkflowRuntime();
 	let taskState = new TaskState();
+	let alignmentState = new AlignmentState();
 	const mtimeTracker = new MtimeTracker();
 
 	function persistState(): void {
-		pi.appendEntry(CUSTOM_ENTRY_TYPE, serializeState(runtime, mtimeTracker.toMap(), taskState));
+		pi.appendEntry(CUSTOM_ENTRY_TYPE, serializeState(runtime, mtimeTracker.toMap(), taskState, alignmentState));
 	}
 
 	function applyToolSet(): void {
@@ -61,7 +64,7 @@ export default function workflowExtension(pi: ExtensionAPI): void {
 		persistState();
 	}
 
-	registerWorkflowStateTool(pi, () => runtime, () => taskState);
+	registerWorkflowStateTool(pi, () => runtime, () => taskState, () => alignmentState);
 	registerWorkflowSwitchTool(pi, () => runtime, handleSwitch);
 	registerTaskManageTool(pi, () => taskState, () => {
 		persistState();
@@ -75,6 +78,7 @@ export default function workflowExtension(pi: ExtensionAPI): void {
 		persistState();
 		void syncArtifacts();
 	});
+	registerAlignmentManageTool(pi, () => alignmentState, persistState);
 	registerWorkflowTransitionTool(pi, () => runtime, () => {
 		applyToolSet();
 		persistState();
@@ -160,6 +164,7 @@ export default function workflowExtension(pi: ExtensionAPI): void {
 		const restored = restoreState(lastEntry?.data);
 		runtime = restored.runtime;
 		taskState = restored.taskState;
+		alignmentState = restored.alignmentState;
 		mtimeTracker.restoreFromMap(restored.artifactMtimes);
 
 		applyToolSet();
@@ -184,8 +189,25 @@ export default function workflowExtension(pi: ExtensionAPI): void {
 			? `\n\n## Active Task Context\n- Current task: ${active.currentTask.id} — ${active.currentTask.summary} [${active.currentTask.status}]${active.currentStep ? `\n- Current step: ${active.currentStep.id} — ${active.currentStep.summary} [${active.currentStep.status}]` : ""}`
 			: "";
 
+		const alignmentSummary = alignmentState.getSummary();
+		let alignmentContext = "";
+		if (runtime.activeWorkflow === "alignment" || runtime.activeWorkflow === "autonomous") {
+			const lines: string[] = [
+				`\n\n## Alignment Status`,
+				`- Aligned: ${alignmentSummary.aligned} | Pending: ${alignmentSummary.pending} | Skipped: ${alignmentSummary.skipped}`,
+			];
+			for (const cat of alignmentState.categories) {
+				lines.push(`### ${cat.name} [${cat.relevance}]`);
+				if (cat.relevance === "not-relevant") continue;
+				for (const part of cat.parts) {
+					lines.push(`- [${part.state}] ${part.id}: ${part.summary}`);
+				}
+			}
+			alignmentContext = lines.join("\n");
+		}
+
 		return {
-			systemPrompt: `${event.systemPrompt}\n\n${buildWorkflowPrompt(runtime)}${taskContext}${changeNotice}`,
+			systemPrompt: `${event.systemPrompt}\n\n${buildWorkflowPrompt(runtime)}${taskContext}${alignmentContext}${changeNotice}`,
 		};
 	});
 
