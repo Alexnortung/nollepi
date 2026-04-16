@@ -1,22 +1,17 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { renderWorkflowMd, renderTaskMd, renderStepMd } from "../../extensions/workflows/artifacts/writer.ts";
-import {
-	createTaskRuntimeState,
-	addTask,
-	addStep,
-	recordTaskCommit,
-} from "../../extensions/workflows/state/task-state.ts";
+import { TaskState } from "../../extensions/workflows/state/task-state.ts";
 
 describe("artifact writer", () => {
 	it("renders workflow ledger markdown", () => {
-		let state = createTaskRuntimeState();
-		state = addTask(state, {
+		const state = new TaskState();
+		state.addTask({
 			summary: "Update domain types",
 			description: "Commit-worthy change",
 			alignmentNeeded: true,
 		});
-		state = recordTaskCommit(state, "01-update-domain-types", "abc123");
+		state.recordTaskCommit("01-update-domain-types", "abc123");
 
 		const markdown = renderWorkflowMd({
 			title: "Button variants",
@@ -34,13 +29,14 @@ describe("artifact writer", () => {
 	});
 
 	it("renders task dossier markdown", () => {
-		let state = createTaskRuntimeState();
-		state = addTask(state, {
+		const state = new TaskState();
+		state.addTask({
 			summary: "Update domain types",
 			description: "Commit-worthy change",
 			alignmentNeeded: true,
 		});
-		state = addStep(state, "01-update-domain-types", {
+		state.addStep({
+			taskId: "01-update-domain-types",
 			summary: "Change exported types",
 			description: "Update exported types and callers",
 			hasArtifact: false,

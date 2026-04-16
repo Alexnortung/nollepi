@@ -66,200 +66,190 @@ function getTaskMdPath(taskId: string): string {
 	return `${getTaskDir(taskId)}/task.md`;
 }
 
-function renumberTasks(tasks: WorkflowTask[]): WorkflowTask[] {
-	return tasks.map((task, index) => {
-		const id = buildTaskId(index + 1, task.summary);
-		return {
-			...task,
+export class TaskState implements TaskRuntimeState {
+	runTitle?: string;
+	runSlug?: string;
+	tasks: WorkflowTask[];
+	currentTaskId?: string;
+	currentStepId?: string;
+
+	constructor(snapshot?: TaskRuntimeState) {
+		this.runTitle = snapshot?.runTitle;
+		this.runSlug = snapshot?.runSlug;
+		this.tasks = snapshot?.tasks ? structuredClone(snapshot.tasks) : [];
+		this.currentTaskId = snapshot?.currentTaskId;
+		this.currentStepId = snapshot?.currentStepId;
+	}
+
+	private renumberTasks(): void {
+		this.tasks = this.tasks.map((task, index) => {
+			const id = buildTaskId(index + 1, task.summary);
+			return {
+				...task,
+				id,
+				taskDir: getTaskDir(id),
+				taskMdPath: getTaskMdPath(id),
+			};
+		});
+	}
+
+	addTask(input: { summary: string; description: string; alignmentNeeded: boolean }): WorkflowTask {
+		const id = buildTaskId(this.tasks.length + 1, input.summary);
+		const task: WorkflowTask = {
 			id,
+			summary: input.summary,
+			description: input.description,
+			status: "proposed",
+			steps: [],
+			commitHashes: [],
+			alignmentNeeded: input.alignmentNeeded,
 			taskDir: getTaskDir(id),
 			taskMdPath: getTaskMdPath(id),
 		};
-	});
-}
 
-export function createTaskRuntimeState(): TaskRuntimeState {
-	return { tasks: [] };
-}
+		this.tasks.push(task);
+		this.currentTaskId ??= task.id;
+		return task;
+	}
 
-export function addTask(
-	state: TaskRuntimeState,
-	input: { summary: string; description: string; alignmentNeeded: boolean },
-): TaskRuntimeState {
-	const id = buildTaskId(state.tasks.length + 1, input.summary);
-	const nextTask: WorkflowTask = {
-		id,
-		summary: input.summary,
-		description: input.description,
-		status: "proposed",
-		steps: [],
-		commitHashes: [],
-		alignmentNeeded: input.alignmentNeeded,
-		taskDir: getTaskDir(id),
-		taskMdPath: getTaskMdPath(id),
-	};
+	updateTask(
+		taskId: string,
+		patch: Partial<Pick<WorkflowTask, "summary" | "description" | "status" | "alignmentNeeded">>,
+	): void {
+		this.tasks = this.tasks.map((task) => (task.id === taskId ? { ...task, ...patch } : task));
+		this.renumberTasks();
+	}
 
-	return {
-		...state,
-		tasks: [...state.tasks, nextTask],
-		currentTaskId: state.currentTaskId ?? nextTask.id,
-		currentStepId: state.currentStepId,
-	};
-}
+	splitTask(
+		taskId: string,
+		replacements: Array<{ summary: string; description: string; alignmentNeeded: boolean }>,
+	): void {
+		const index = this.tasks.findIndex((task) => task.id === taskId);
+		if (index === -1) throw new Error(`Unknown task: ${taskId}`);
 
-export function updateTask(
-	state: TaskRuntimeState,
-	taskId: string,
-	patch: Partial<Pick<WorkflowTask, "summary" | "description" | "status" | "alignmentNeeded">>,
-): TaskRuntimeState {
-	const nextTasks = state.tasks.map((task) => (task.id === taskId ? { ...task, ...patch } : task));
-	return { ...state, tasks: renumberTasks(nextTasks) };
-}
+		const replacementTasks: WorkflowTask[] = replacements.map((item) => ({
+			id: "",
+			summary: item.summary,
+			description: item.description,
+			status: "proposed",
+			steps: [],
+			commitHashes: [],
+			alignmentNeeded: item.alignmentNeeded,
+			taskDir: "",
+			taskMdPath: "",
+		}));
 
-export function splitTask(
-	state: TaskRuntimeState,
-	taskId: string,
-	replacements: Array<{ summary: string; description: string; alignmentNeeded: boolean }>,
-): TaskRuntimeState {
-	const index = state.tasks.findIndex((task) => task.id === taskId);
-	if (index === -1) throw new Error(`Unknown task: ${taskId}`);
+		this.tasks = [
+			...this.tasks.slice(0, index),
+			...replacementTasks,
+			...this.tasks.slice(index + 1),
+		];
+		this.renumberTasks();
+		this.currentTaskId = this.tasks[index]?.id;
+		this.currentStepId = this.tasks[index]?.steps[0]?.id;
+	}
 
-	const replacementTasks: WorkflowTask[] = replacements.map((item) => ({
-		id: "",
-		summary: item.summary,
-		description: item.description,
-		status: "proposed",
-		steps: [],
-		commitHashes: [],
-		alignmentNeeded: item.alignmentNeeded,
-		taskDir: "",
-		taskMdPath: "",
-	}));
-
-	const nextTasks = [
-		...state.tasks.slice(0, index),
-		...replacementTasks,
-		...state.tasks.slice(index + 1),
-	];
-	const renumbered = renumberTasks(nextTasks);
-
-	return {
-		...state,
-		tasks: renumbered,
-		currentTaskId: renumbered[index]?.id,
-		currentStepId: renumbered[index]?.steps[0]?.id,
-	};
-}
-
-export function mergeTasks(
-	state: TaskRuntimeState,
-	taskIds: string[],
-	merged: { summary: string; description: string; alignmentNeeded: boolean },
-): TaskRuntimeState {
-	const kept = state.tasks.filter((task) => !taskIds.includes(task.id));
-	const mergedTask: WorkflowTask = {
-		id: "",
-		summary: merged.summary,
-		description: merged.description,
-		status: "proposed",
-		steps: [],
-		commitHashes: [],
-		alignmentNeeded: merged.alignmentNeeded,
-		taskDir: "",
-		taskMdPath: "",
-	};
-	const nextTasks = renumberTasks([...kept, mergedTask]);
-	return {
-		...state,
-		tasks: nextTasks,
-		currentTaskId: nextTasks.at(-1)?.id,
-		currentStepId: nextTasks.at(-1)?.steps[0]?.id,
-	};
-}
-
-export function addStep(
-	state: TaskRuntimeState,
-	taskId: string,
-	input: { summary: string; description: string; hasArtifact: boolean; artifactPath?: string },
-): TaskRuntimeState {
-	let createdStepId: string | undefined;
-
-	const nextTasks = state.tasks.map((task) => {
-		if (task.id !== taskId) return task;
-		createdStepId = `step-${task.steps.length + 1}`;
-		return {
-			...task,
-			steps: [
-				...task.steps,
-				{
-					id: createdStepId,
-					summary: input.summary,
-					description: input.description,
-					status: "pending",
-					hasArtifact: input.hasArtifact,
-					artifactPath: input.artifactPath,
-				},
-			],
+	mergeTasks(
+		taskIds: string[],
+		merged: { summary: string; description: string; alignmentNeeded: boolean },
+	): void {
+		const kept = this.tasks.filter((task) => !taskIds.includes(task.id));
+		const mergedTask: WorkflowTask = {
+			id: "",
+			summary: merged.summary,
+			description: merged.description,
+			status: "proposed",
+			steps: [],
+			commitHashes: [],
+			alignmentNeeded: merged.alignmentNeeded,
+			taskDir: "",
+			taskMdPath: "",
 		};
-	});
+		this.tasks = [...kept, mergedTask];
+		this.renumberTasks();
+		this.currentTaskId = this.tasks.at(-1)?.id;
+		this.currentStepId = this.tasks.at(-1)?.steps[0]?.id;
+	}
 
-	return {
-		...state,
-		tasks: nextTasks,
-		currentStepId: state.currentStepId ?? createdStepId ?? state.currentStepId,
-	};
-}
+	addStep(input: {
+		taskId: string;
+		summary: string;
+		description: string;
+		hasArtifact: boolean;
+		artifactPath?: string;
+	}): WorkflowStep {
+		let createdStep: WorkflowStep | undefined;
+		this.tasks = this.tasks.map((task) => {
+			if (task.id !== input.taskId) return task;
+			createdStep = {
+				id: `step-${task.steps.length + 1}`,
+				summary: input.summary,
+				description: input.description,
+				status: "pending",
+				hasArtifact: input.hasArtifact,
+				artifactPath: input.artifactPath,
+			};
+			return {
+				...task,
+				steps: [...task.steps, createdStep],
+			};
+		});
+		if (!createdStep) throw new Error(`Unknown task: ${input.taskId}`);
+		this.currentStepId ??= createdStep.id;
+		return createdStep;
+	}
 
-export function updateStep(
-	state: TaskRuntimeState,
-	taskId: string,
-	stepId: string,
-	patch: Partial<WorkflowStep>,
-): TaskRuntimeState {
-	return {
-		...state,
-		tasks: state.tasks.map((task) => {
+	updateStep(taskId: string, stepId: string, patch: Partial<WorkflowStep>): void {
+		this.tasks = this.tasks.map((task) => {
 			if (task.id !== taskId) return task;
 			return {
 				...task,
 				steps: task.steps.map((step) => (step.id === stepId ? { ...step, ...patch } : step)),
 			};
-		}),
-	};
-}
+		});
+	}
 
-export function completeStep(state: TaskRuntimeState, taskId: string, stepId: string): TaskRuntimeState {
-	return updateStep(state, taskId, stepId, { status: "done" });
-}
+	completeStep(taskId: string, stepId: string): void {
+		this.updateStep(taskId, stepId, { status: "done" });
+	}
 
-export function recordTaskCommit(state: TaskRuntimeState, taskId: string, hash: string): TaskRuntimeState {
-	return {
-		...state,
-		tasks: state.tasks.map((task) => {
+	recordTaskCommit(taskId: string, hash: string): void {
+		this.tasks = this.tasks.map((task) => {
 			if (task.id !== taskId) return task;
 			return {
 				...task,
 				commitHashes: task.commitHashes.includes(hash) ? task.commitHashes : [...task.commitHashes, hash],
 			};
-		}),
-	};
-}
+		});
+	}
 
-export function selectCurrentTask(state: TaskRuntimeState, taskId: string): TaskRuntimeState {
-	const task = state.tasks.find((item) => item.id === taskId);
-	return {
-		...state,
-		currentTaskId: taskId,
-		currentStepId: task?.steps[0]?.id,
-	};
-}
+	selectCurrentTask(taskId: string): void {
+		const task = this.tasks.find((item) => item.id === taskId);
+		this.currentTaskId = taskId;
+		this.currentStepId = task?.steps[0]?.id;
+	}
 
-export function getActiveTaskContext(state: TaskRuntimeState): ActiveTaskContext {
-	const currentTask = state.tasks.find((task) => task.id === state.currentTaskId);
-	const currentStep =
-		currentTask?.steps.find((step) => step.id === state.currentStepId) ??
-		currentTask?.steps.find((step) => step.status !== "done") ??
-		currentTask?.steps[0];
+	getActiveTaskContext(): ActiveTaskContext {
+		const currentTask = this.tasks.find((task) => task.id === this.currentTaskId);
+		const currentStep =
+			currentTask?.steps.find((step) => step.id === this.currentStepId) ??
+			currentTask?.steps.find((step) => step.status !== "done") ??
+			currentTask?.steps[0];
 
-	return { currentTask, currentStep };
+		return { currentTask, currentStep };
+	}
+
+	serialize(): TaskRuntimeState {
+		return {
+			runTitle: this.runTitle,
+			runSlug: this.runSlug,
+			tasks: structuredClone(this.tasks),
+			currentTaskId: this.currentTaskId,
+			currentStepId: this.currentStepId,
+		};
+	}
+
+	static restore(snapshot?: TaskRuntimeState): TaskState {
+		return new TaskState(snapshot);
+	}
 }
