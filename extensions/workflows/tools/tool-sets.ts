@@ -11,8 +11,8 @@ const WORKFLOW_CORE_TOOLS = [
 const WORKFLOW_TOOL_SETS: Record<WorkflowName, string[]> = {
 	base: [...BASE_TOOLS, ...WORKFLOW_CORE_TOOLS],
 	superpowers: [...BASE_TOOLS, ...WORKFLOW_CORE_TOOLS],
-	alignment: [...BASE_TOOLS, ...WORKFLOW_CORE_TOOLS],
-	autonomous: [...BASE_TOOLS, ...WORKFLOW_CORE_TOOLS, ...EXTRA_TOOLS],
+	alignment: [...BASE_TOOLS, ...WORKFLOW_CORE_TOOLS, "task_manage"],
+	autonomous: [...BASE_TOOLS, ...WORKFLOW_CORE_TOOLS, "task_manage", ...EXTRA_TOOLS],
 };
 
 export function getToolsForWorkflow(

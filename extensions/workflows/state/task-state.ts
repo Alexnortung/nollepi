@@ -116,7 +116,10 @@ export class TaskState implements TaskRuntimeState {
 		taskId: string,
 		patch: Partial<Pick<WorkflowTask, "summary" | "description" | "status" | "alignmentNeeded">>,
 	): void {
-		this.tasks = this.tasks.map((task) => (task.id === taskId ? { ...task, ...patch } : task));
+		const definedPatch = Object.fromEntries(
+			Object.entries(patch).filter(([, value]) => value !== undefined),
+		) as Partial<Pick<WorkflowTask, "summary" | "description" | "status" | "alignmentNeeded">>;
+		this.tasks = this.tasks.map((task) => (task.id === taskId ? { ...task, ...definedPatch } : task));
 		this.renumberTasks();
 	}
 
