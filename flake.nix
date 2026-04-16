@@ -114,6 +114,7 @@
           default = pkgs.mkShellNoCC {
             packages = [
               pkgs.nodejs
+              pkgs.pnpm
               pkgs.tsx
             ];
           };
