@@ -8,6 +8,7 @@ import {
 	type WorkflowName,
 	type WorkflowRuntime,
 } from "./state/workflow-state.ts";
+import { registerTaskCommitTool } from "./tools/task-commit-tool.ts";
 import { registerWorkflowStateTool } from "./tools/workflow-info.ts";
 import { registerWorkflowSwitchTool } from "./tools/workflow-switch.ts";
 import { registerStepManageTool } from "./tools/step-manage-tool.ts";
@@ -48,6 +49,7 @@ export default function workflowExtension(pi: ExtensionAPI): void {
 	registerWorkflowSwitchTool(pi, () => runtime, handleSwitch);
 	registerTaskManageTool(pi, () => taskState, persistState);
 	registerStepManageTool(pi, () => taskState, persistState);
+	registerTaskCommitTool(pi, () => taskState, persistState);
 	registerWorkflowTransitionTool(pi, () => runtime, () => {
 		applyToolSet();
 		persistState();
