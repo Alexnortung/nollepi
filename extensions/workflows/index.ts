@@ -1,11 +1,13 @@
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { readTaskStateFromArtifacts } from "./artifacts/reader.ts";
 import { MtimeTracker } from "./artifacts/mtime-tracker.ts";
-import { writeWorkflowArtifacts } from "./artifacts/writer.ts";
 import { getTaskMdPath, getWorkflowMdPath } from "./artifacts/paths.ts";
+import { writeWorkflowArtifacts } from "./artifacts/writer.ts";
 import { buildWorkflowPrompt } from "./prompts/prompt-builder.ts";
-import { restoreState, serializeState, type WorkflowExtensionState } from "./state/persistence.ts";
+import { renderSidebar, type SidebarState } from "./sidebar/renderer.ts";
 import { AlignmentState } from "./state/alignment-state.ts";
+import { restoreState, serializeState, type WorkflowExtensionState } from "./state/persistence.ts";
+import { SubagentState } from "./state/subagent-state.ts";
 import { TaskState } from "./state/task-state.ts";
 import {
 	createWorkflowRuntime,
@@ -13,29 +15,40 @@ import {
 	type WorkflowRuntime,
 } from "./state/workflow-state.ts";
 import { registerAlignmentManageTool } from "./tools/alignment-manage-tool.ts";
-import { registerTaskCommitTool } from "./tools/task-commit-tool.ts";
+import { registerDispatchSubagentTool } from "./tools/dispatch-subagent-tool.ts";
 import { registerWorkflowStateTool } from "./tools/workflow-info.ts";
-import { registerWorkflowSwitchTool } from "./tools/workflow-switch.ts";
 import { registerStepManageTool } from "./tools/step-manage-tool.ts";
+import { registerTaskCommitTool } from "./tools/task-commit-tool.ts";
 import { registerTaskManageTool } from "./tools/task-manage-tool.ts";
-import { registerWorkflowTransitionTool } from "./tools/workflow-transition.ts";
-import { renderSidebar, type SidebarState } from "./sidebar/renderer.ts";
 import { getToolsForWorkflow } from "./tools/tool-sets.ts";
+import { registerWorkflowSwitchTool } from "./tools/workflow-switch.ts";
+import { registerWorkflowTransitionTool } from "./tools/workflow-transition.ts";
 
 const CUSTOM_ENTRY_TYPE = "workflow-state";
+
+type WorkflowContext = Parameters<Parameters<ExtensionAPI["on"]>[1]>[1];
 
 export default function workflowExtension(pi: ExtensionAPI): void {
 	let runtime: WorkflowRuntime = createWorkflowRuntime();
 	let taskState = new TaskState();
 	let alignmentState = new AlignmentState();
+	let subagentState = new SubagentState();
+	let latestUiContext: WorkflowContext | undefined;
 	const mtimeTracker = new MtimeTracker();
 
 	function persistState(): void {
-		pi.appendEntry(CUSTOM_ENTRY_TYPE, serializeState(runtime, mtimeTracker.toMap(), taskState, alignmentState));
+		pi.appendEntry(
+			CUSTOM_ENTRY_TYPE,
+			serializeState(runtime, mtimeTracker.toMap(), taskState, alignmentState, subagentState),
+		);
 	}
 
 	function applyToolSet(): void {
 		pi.setActiveTools(getToolsForWorkflow(runtime.activeWorkflow, runtime.workflowState));
+	}
+
+	function refreshUi(): void {
+		if (latestUiContext) updateStatus(latestUiContext);
 	}
 
 	async function syncArtifacts(): Promise<void> {
@@ -80,10 +93,18 @@ export default function workflowExtension(pi: ExtensionAPI): void {
 						})),
 					}
 				: undefined,
+			subagents: subagentState.runs.map((run) => ({
+				id: run.id,
+				role: run.role,
+				status: run.status,
+				taskPreview: run.taskPreview,
+				elapsedSeconds: Math.max(0, Math.round(((run.finishedAt ?? Date.now()) - run.startedAt) / 1000)),
+			})),
 		};
 	}
 
-	function updateStatus(ctx: Parameters<Parameters<ExtensionAPI["on"]>[1]>[1]): void {
+	function updateStatus(ctx: WorkflowContext): void {
+		latestUiContext = ctx;
 		if (!ctx.hasUI) return;
 		ctx.ui.setStatus(
 			"workflow",
@@ -91,7 +112,6 @@ export default function workflowExtension(pi: ExtensionAPI): void {
 				(runtime.workflowState !== "idle" ? ctx.ui.theme.fg("muted", `:${runtime.workflowState}`) : ""),
 		);
 
-		// Sidebar widget
 		const sidebarState = buildSidebarState();
 		const lines = renderSidebar(sidebarState);
 		if (lines.length > 1) {
@@ -104,26 +124,43 @@ export default function workflowExtension(pi: ExtensionAPI): void {
 	function handleSwitch(_newWorkflow: WorkflowName): void {
 		applyToolSet();
 		persistState();
+		refreshUi();
 	}
 
-	registerWorkflowStateTool(pi, () => runtime, () => taskState, () => alignmentState);
+	registerWorkflowStateTool(pi, () => runtime, () => taskState, () => alignmentState, () => subagentState);
 	registerWorkflowSwitchTool(pi, () => runtime, handleSwitch);
 	registerTaskManageTool(pi, () => taskState, () => {
 		persistState();
 		void syncArtifacts();
+		refreshUi();
 	});
 	registerStepManageTool(pi, () => taskState, () => {
 		persistState();
 		void syncArtifacts();
+		refreshUi();
 	});
 	registerTaskCommitTool(pi, () => taskState, () => {
 		persistState();
 		void syncArtifacts();
+		refreshUi();
 	});
-	registerAlignmentManageTool(pi, () => alignmentState, persistState);
+	registerAlignmentManageTool(pi, () => alignmentState, () => {
+		persistState();
+		refreshUi();
+	});
+	registerDispatchSubagentTool(pi, {
+		getRuntime: () => runtime,
+		getTaskState: () => taskState,
+		getAlignmentState: () => alignmentState,
+		getSubagentState: () => subagentState,
+		persistState,
+		requestUiRefresh: refreshUi,
+		isIdle: () => latestUiContext?.isIdle() ?? false,
+	});
 	registerWorkflowTransitionTool(pi, () => runtime, () => {
 		applyToolSet();
 		persistState();
+		refreshUi();
 	});
 
 	pi.registerCommand("workflow", {
@@ -186,6 +223,7 @@ export default function workflowExtension(pi: ExtensionAPI): void {
 			await mtimeTracker.recordMtime(getWorkflowMdPath(runtime.runId));
 			await mtimeTracker.recordMtimes(taskState.tasks.map((task) => getTaskMdPath(runtime.runId!, task.id)));
 			persistState();
+			refreshUi();
 
 			if (ctx.hasUI) {
 				if (restored.warnings.length > 0) {
@@ -207,7 +245,9 @@ export default function workflowExtension(pi: ExtensionAPI): void {
 		runtime = restored.runtime;
 		taskState = restored.taskState;
 		alignmentState = restored.alignmentState;
+		subagentState = restored.subagentState;
 		mtimeTracker.restoreFromMap(restored.artifactMtimes);
+		latestUiContext = ctx;
 
 		applyToolSet();
 		updateStatus(ctx);

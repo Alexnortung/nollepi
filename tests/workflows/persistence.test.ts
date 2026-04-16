@@ -5,6 +5,7 @@ import {
 	restoreState,
 	type WorkflowExtensionState,
 } from "../../extensions/workflows/state/persistence.ts";
+import { SubagentState } from "../../extensions/workflows/state/subagent-state.ts";
 import { createWorkflowRuntime } from "../../extensions/workflows/state/workflow-state.ts";
 
 describe("persistence", () => {
@@ -28,6 +29,27 @@ describe("persistence", () => {
 		assert.equal(restored.workflowState, "intake");
 		assert.equal(restored.runId, "2026-04-16-01-test");
 		assert.equal(artifactMtimes.size, 1);
+	});
+
+	it("serializes and restores subagent state while dropping in-flight runs", () => {
+		const runtime = createWorkflowRuntime();
+		const mtimes = new Map<string, number>();
+		const subagents = new SubagentState();
+		subagents.startRun({ role: "builder", taskId: "01-task", goal: "Build", taskPreview: "Build" });
+		const finished = subagents.startRun({ role: "reviewer", taskId: "01-task", goal: "Review", taskPreview: "Review" });
+		subagents.finishRun(finished.id, {
+			role: "reviewer",
+			verdict: "pass",
+			issues: [],
+			verificationGaps: [],
+			suggestedNextAction: "Advance",
+		}, "done");
+
+		const serialized = serializeState(runtime, mtimes, undefined, undefined, subagents);
+		const restored = restoreState(serialized);
+		assert.equal(restored.subagentState.getActiveRuns().length, 0);
+		assert.equal(restored.subagentState.runs.length, 1);
+		assert.equal(restored.subagentState.runs[0].id, finished.id);
 	});
 
 	it("restoreState returns defaults for undefined input", () => {

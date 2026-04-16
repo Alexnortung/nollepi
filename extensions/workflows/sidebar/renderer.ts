@@ -35,12 +35,21 @@ export interface SidebarAlignment {
 	categories: SidebarAlignmentCategory[];
 }
 
+export interface SidebarSubagentRun {
+	id: number;
+	role: string;
+	status: string;
+	taskPreview: string;
+	elapsedSeconds: number;
+}
+
 export interface SidebarState {
 	workflow: string;
 	workflowState: string;
 	runId?: string;
 	tasks: SidebarTask[];
 	alignment?: SidebarAlignment;
+	subagents?: SidebarSubagentRun[];
 }
 
 const TASK_ICONS: Record<string, string> = {
@@ -66,6 +75,12 @@ const ALIGNMENT_ICONS: Record<string, string> = {
 	"not-relevant": "—",
 };
 
+const SUBAGENT_ICONS: Record<string, string> = {
+	"running": "●",
+	"done": "✓",
+	"error": "✗",
+};
+
 function taskIcon(status: string): string {
 	return TASK_ICONS[status] ?? "?";
 }
@@ -83,10 +98,8 @@ const ALIGNMENT_WORKFLOWS = new Set(["alignment", "autonomous"]);
 export function renderSidebar(state: SidebarState): string[] {
 	const lines: string[] = [];
 
-	// Header
 	lines.push(`⚙ ${state.workflow}:${state.workflowState}`);
 
-	// Tasks section
 	if (state.tasks.length > 0) {
 		const doneCount = state.tasks.filter((t) => t.status === "committed" || t.status === "approved-complete").length;
 		lines.push(`─ Tasks (${doneCount}/${state.tasks.length} done)`);
@@ -96,7 +109,6 @@ export function renderSidebar(state: SidebarState): string[] {
 			const pointer = task.isCurrent ? " ←" : "";
 			lines.push(`  ${icon} ${task.id} — ${task.summary}${pointer}`);
 
-			// Show steps only for current task
 			if (task.isCurrent && task.steps.length > 0) {
 				for (const step of task.steps) {
 					const sIcon = stepIcon(step.status);
@@ -106,7 +118,6 @@ export function renderSidebar(state: SidebarState): string[] {
 		}
 	}
 
-	// Alignment section (only for alignment/autonomous workflows)
 	if (ALIGNMENT_WORKFLOWS.has(state.workflow) && state.alignment && state.alignment.total > 0) {
 		lines.push(`─ Alignment (${state.alignment.aligned}/${state.alignment.total})`);
 
@@ -118,6 +129,13 @@ export function renderSidebar(state: SidebarState): string[] {
 			if (cat.parts.length === 0) continue;
 			const icons = cat.parts.map((p) => alignmentIcon(p.state)).join("");
 			lines.push(`  ${cat.name}: ${icons}`);
+		}
+	}
+
+	if (state.subagents && state.subagents.length > 0) {
+		lines.push(`─ Subagents (${state.subagents.filter((run) => run.status === "running").length} running)`);
+		for (const run of state.subagents) {
+			lines.push(`  ${SUBAGENT_ICONS[run.status] ?? "?"} ${run.role} #${run.id} — ${run.taskPreview} (${run.elapsedSeconds}s)`);
 		}
 	}
 
