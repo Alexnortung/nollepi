@@ -47,7 +47,9 @@ Tasks in `autonomous` do not follow the same rules as tasks in `alignment`.
 In this workflow, the agent may:
 
 - make whatever changes it decides are needed
-- self-review, optionally with a subagent
+- dispatch an investigator when additional repo understanding is needed
+- dispatch a builder to implement an active task
+- self-review or dispatch a reviewer after implementation exists
 - proceed automatically to the next step after review
 
 Autonomous still benefits from structured tasks and steps, but the authority model is different.
@@ -107,6 +109,7 @@ Useful sidebar content includes:
 - current task and step
 - sandbox status
 - worktree status
+- running investigator, builder, or reviewer state when active
 - review/verification status
 - pull-request status
 
