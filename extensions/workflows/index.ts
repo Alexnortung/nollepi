@@ -1,5 +1,8 @@
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import { readTaskStateFromArtifacts } from "./artifacts/reader.ts";
 import { MtimeTracker } from "./artifacts/mtime-tracker.ts";
+import { writeWorkflowArtifacts } from "./artifacts/writer.ts";
+import { getTaskMdPath, getWorkflowMdPath } from "./artifacts/paths.ts";
 import { buildWorkflowPrompt } from "./prompts/prompt-builder.ts";
 import { restoreState, serializeState, type WorkflowExtensionState } from "./state/persistence.ts";
 import { TaskState } from "./state/task-state.ts";
@@ -31,6 +34,19 @@ export default function workflowExtension(pi: ExtensionAPI): void {
 		pi.setActiveTools(getToolsForWorkflow(runtime.activeWorkflow, runtime.workflowState));
 	}
 
+	async function syncArtifacts(): Promise<void> {
+		if (!runtime.runId) return;
+		await writeWorkflowArtifacts(process.cwd(), {
+			runId: runtime.runId,
+			title: taskState.runTitle ?? runtime.runId,
+			workflowType: runtime.activeWorkflow,
+			workflowState: runtime.workflowState,
+			taskState,
+		});
+		await mtimeTracker.recordMtime(getWorkflowMdPath(runtime.runId));
+		await mtimeTracker.recordMtimes(taskState.tasks.map((task) => getTaskMdPath(runtime.runId!, task.id)));
+	}
+
 	function updateStatus(ctx: Parameters<Parameters<ExtensionAPI["on"]>[1]>[1]): void {
 		if (!ctx.hasUI) return;
 		ctx.ui.setStatus(
@@ -47,9 +63,18 @@ export default function workflowExtension(pi: ExtensionAPI): void {
 
 	registerWorkflowStateTool(pi, () => runtime, () => taskState);
 	registerWorkflowSwitchTool(pi, () => runtime, handleSwitch);
-	registerTaskManageTool(pi, () => taskState, persistState);
-	registerStepManageTool(pi, () => taskState, persistState);
-	registerTaskCommitTool(pi, () => taskState, persistState);
+	registerTaskManageTool(pi, () => taskState, () => {
+		persistState();
+		void syncArtifacts();
+	});
+	registerStepManageTool(pi, () => taskState, () => {
+		persistState();
+		void syncArtifacts();
+	});
+	registerTaskCommitTool(pi, () => taskState, () => {
+		persistState();
+		void syncArtifacts();
+	});
 	registerWorkflowTransitionTool(pi, () => runtime, () => {
 		applyToolSet();
 		persistState();
@@ -110,17 +135,18 @@ export default function workflowExtension(pi: ExtensionAPI): void {
 				return;
 			}
 
-			const changed = await mtimeTracker.checkForChanges();
-			if (changed.length === 0) {
-				if (ctx.hasUI) ctx.ui.notify("No artifact changes detected.", "info");
-			} else {
-				if (ctx.hasUI) {
-					ctx.ui.notify(
-						`Detected changes in ${changed.length} file(s):\n${changed.map((f) => `  ${f}`).join("\n")}`,
-						"info",
-					);
+			const restored = await readTaskStateFromArtifacts(process.cwd(), runtime.runId);
+			taskState = restored.taskState;
+			await mtimeTracker.recordMtime(getWorkflowMdPath(runtime.runId));
+			await mtimeTracker.recordMtimes(taskState.tasks.map((task) => getTaskMdPath(runtime.runId!, task.id)));
+			persistState();
+
+			if (ctx.hasUI) {
+				if (restored.warnings.length > 0) {
+					ctx.ui.notify(restored.warnings.join("\n"), "warning");
+				} else {
+					ctx.ui.notify(`Reloaded ${taskState.tasks.length} task(s) from workflow artifacts.`, "info");
 				}
-				persistState();
 			}
 		},
 	});

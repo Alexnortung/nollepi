@@ -1,3 +1,8 @@
+import * as fs from "node:fs/promises";
+import * as path from "node:path";
+import { getTaskMdPath, getWorkflowMdPath } from "./paths.ts";
+import { TaskState } from "../state/task-state.ts";
+
 export function parseWorkflowMd(markdown: string): {
 	workflowType: string;
 	workflowState: string;
@@ -73,4 +78,54 @@ export function parseTaskMd(markdown: string): {
 	}));
 
 	return { id, status, alignmentNeeded, commitHashes, description, steps };
+}
+
+export async function readTaskStateFromArtifacts(
+	baseDir: string,
+	runId: string,
+): Promise<{ taskState: TaskState; warnings: string[] }> {
+	const warnings: string[] = [];
+	const workflowPath = path.join(baseDir, getWorkflowMdPath(runId));
+	const workflowMd = await fs.readFile(workflowPath, "utf8");
+	const parsedWorkflow = parseWorkflowMd(workflowMd);
+
+	const tasks = [] as ConstructorParameters<typeof TaskState>[0]["tasks"];
+	for (const workflowTask of parsedWorkflow.tasks) {
+		const taskPath = path.join(baseDir, getTaskMdPath(runId, workflowTask.id));
+		const taskMd = await fs.readFile(taskPath, "utf8");
+		const parsedTask = parseTaskMd(taskMd);
+		const workflowCommits = [...workflowTask.commitHashes].sort().join(",");
+		const taskCommits = [...parsedTask.commitHashes].sort().join(",");
+		if (workflowCommits !== taskCommits) {
+			warnings.push(
+				`Artifact mismatch: workflow.md says ${workflowTask.commitHashes.join(",")}, task.md says ${parsedTask.commitHashes.join(",")} for ${workflowTask.id}.`,
+			);
+		}
+
+		tasks.push({
+			id: parsedTask.id,
+			summary: workflowTask.summary,
+			description: parsedTask.description,
+			status: parsedTask.status as any,
+			steps: parsedTask.steps.map((step, index) => ({
+				id: `step-${index + 1}`,
+				summary: step.summary,
+				description: "",
+				status: step.status as any,
+				hasArtifact: Boolean(step.artifactPath),
+				artifactPath: step.artifactPath,
+			})),
+			commitHashes: parsedTask.commitHashes,
+			alignmentNeeded: parsedTask.alignmentNeeded,
+			taskDir: `tasks/${parsedTask.id}`,
+			taskMdPath: `tasks/${parsedTask.id}/task.md`,
+		});
+	}
+
+	const taskState = new TaskState({
+		tasks,
+		currentTaskId: tasks[0]?.id,
+		currentStepId: tasks[0]?.steps[0]?.id,
+	});
+	return { taskState, warnings };
 }
