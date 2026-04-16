@@ -1,3 +1,6 @@
+import * as fs from "node:fs/promises";
+import * as path from "node:path";
+import { getStepMdPath, getTaskMdPath, getWorkflowMdPath } from "./paths.ts";
 import type { TaskRuntimeState, WorkflowStep, WorkflowTask } from "../state/task-state.ts";
 
 export function renderWorkflowMd(input: {
@@ -67,4 +70,42 @@ export function renderStepMd(step: WorkflowStep): string {
 		step.description,
 		"",
 	].join("\n");
+}
+
+export async function writeWorkflowArtifacts(
+	baseDir: string,
+	input: {
+		runId: string;
+		title: string;
+		workflowType: string;
+		workflowState: string;
+		taskState: TaskRuntimeState;
+	},
+): Promise<void> {
+	const workflowPath = path.join(baseDir, getWorkflowMdPath(input.runId));
+	await fs.mkdir(path.dirname(workflowPath), { recursive: true });
+	await fs.writeFile(
+		workflowPath,
+		renderWorkflowMd({
+			title: input.title,
+			workflowType: input.workflowType,
+			workflowState: input.workflowState,
+			runId: input.runId,
+			taskState: input.taskState,
+		}),
+		"utf8",
+	);
+
+	for (const task of input.taskState.tasks) {
+		const taskPath = path.join(baseDir, getTaskMdPath(input.runId, task.id));
+		await fs.mkdir(path.dirname(taskPath), { recursive: true });
+		await fs.writeFile(taskPath, renderTaskMd(task), "utf8");
+
+		for (const step of task.steps) {
+			if (!step.hasArtifact || !step.artifactPath) continue;
+			const stepSlug = step.artifactPath.replace(/\.md$/, "");
+			const stepPath = path.join(baseDir, getStepMdPath(input.runId, task.id, stepSlug));
+			await fs.writeFile(stepPath, renderStepMd(step), "utf8");
+		}
+	}
 }
