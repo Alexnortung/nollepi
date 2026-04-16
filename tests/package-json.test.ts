@@ -10,6 +10,7 @@ test("package manifest points pi at concrete extension package directories and v
 	assert.deepEqual(pkg.pi?.extensions, [
 		"./extensions/guards",
 		"./extensions/pi-usage-extension",
+		"./extensions/workflows",
 	]);
 });
 

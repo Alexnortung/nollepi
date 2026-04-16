@@ -17,7 +17,8 @@
 	"pi": {
 		"extensions": [
 			"./extensions/guards",
-			"./extensions/pi-usage-extension"
+			"./extensions/pi-usage-extension",
+			"./extensions/workflows"
 		],
 		"skills": [
 			"./skills"
