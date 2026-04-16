@@ -17,13 +17,13 @@ describe("getToolsForWorkflow", () => {
 		assert.deepEqual(tools, [...BASE_TOOLS, ...WORKFLOW_TOOLS]);
 	});
 
-	it("returns base tools plus task, step, and commit manage for alignment", () => {
+	it("returns base tools plus task, step, commit, and alignment manage for alignment", () => {
 		const tools = getToolsForWorkflow("alignment", "intake");
-		assert.deepEqual(tools, [...BASE_TOOLS, ...WORKFLOW_TOOLS, "task_manage", "step_manage", "task_commit"]);
+		assert.deepEqual(tools, [...BASE_TOOLS, ...WORKFLOW_TOOLS, "task_manage", "step_manage", "task_commit", "alignment_manage"]);
 	});
 
-	it("returns base plus task/step/commit manage and extra tools for autonomous", () => {
+	it("returns base plus task/step/commit/alignment manage and extra tools for autonomous", () => {
 		const tools = getToolsForWorkflow("autonomous", "intake");
-		assert.deepEqual(tools, [...BASE_TOOLS, ...WORKFLOW_TOOLS, "task_manage", "step_manage", "task_commit", ...EXTRA_TOOLS]);
+		assert.deepEqual(tools, [...BASE_TOOLS, ...WORKFLOW_TOOLS, "task_manage", "step_manage", "task_commit", "alignment_manage", ...EXTRA_TOOLS]);
 	});
 });
