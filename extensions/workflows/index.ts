@@ -2,6 +2,7 @@ import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { MtimeTracker } from "./artifacts/mtime-tracker.ts";
 import { buildWorkflowPrompt } from "./prompts/prompt-builder.ts";
 import { restoreState, serializeState, type WorkflowExtensionState } from "./state/persistence.ts";
+import { TaskState } from "./state/task-state.ts";
 import {
 	createWorkflowRuntime,
 	type WorkflowName,
@@ -9,6 +10,7 @@ import {
 } from "./state/workflow-state.ts";
 import { registerWorkflowStateTool } from "./tools/workflow-info.ts";
 import { registerWorkflowSwitchTool } from "./tools/workflow-switch.ts";
+import { registerTaskManageTool } from "./tools/task-manage-tool.ts";
 import { registerWorkflowTransitionTool } from "./tools/workflow-transition.ts";
 import { getToolsForWorkflow } from "./tools/tool-sets.ts";
 
@@ -16,10 +18,11 @@ const CUSTOM_ENTRY_TYPE = "workflow-state";
 
 export default function workflowExtension(pi: ExtensionAPI): void {
 	let runtime: WorkflowRuntime = createWorkflowRuntime();
+	let taskState = new TaskState();
 	const mtimeTracker = new MtimeTracker();
 
 	function persistState(): void {
-		pi.appendEntry(CUSTOM_ENTRY_TYPE, serializeState(runtime, mtimeTracker.toMap()));
+		pi.appendEntry(CUSTOM_ENTRY_TYPE, serializeState(runtime, mtimeTracker.toMap(), taskState));
 	}
 
 	function applyToolSet(): void {
@@ -40,8 +43,9 @@ export default function workflowExtension(pi: ExtensionAPI): void {
 		persistState();
 	}
 
-	registerWorkflowStateTool(pi, () => runtime);
+	registerWorkflowStateTool(pi, () => runtime, () => taskState);
 	registerWorkflowSwitchTool(pi, () => runtime, handleSwitch);
+	registerTaskManageTool(pi, () => taskState, persistState);
 	registerWorkflowTransitionTool(pi, () => runtime, () => {
 		applyToolSet();
 		persistState();
@@ -125,6 +129,7 @@ export default function workflowExtension(pi: ExtensionAPI): void {
 
 		const restored = restoreState(lastEntry?.data);
 		runtime = restored.runtime;
+		taskState = restored.taskState;
 		mtimeTracker.restoreFromMap(restored.artifactMtimes);
 
 		applyToolSet();
@@ -144,8 +149,13 @@ export default function workflowExtension(pi: ExtensionAPI): void {
 			persistState();
 		}
 
+		const active = taskState.getActiveTaskContext();
+		const taskContext = active.currentTask
+			? `\n\n## Active Task Context\n- Current task: ${active.currentTask.id} — ${active.currentTask.summary} [${active.currentTask.status}]${active.currentStep ? `\n- Current step: ${active.currentStep.id} — ${active.currentStep.summary} [${active.currentStep.status}]` : ""}`
+			: "";
+
 		return {
-			systemPrompt: `${event.systemPrompt}\n\n${buildWorkflowPrompt(runtime)}${changeNotice}`,
+			systemPrompt: `${event.systemPrompt}\n\n${buildWorkflowPrompt(runtime)}${taskContext}${changeNotice}`,
 		};
 	});
 
