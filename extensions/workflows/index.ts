@@ -19,6 +19,7 @@ import { registerWorkflowSwitchTool } from "./tools/workflow-switch.ts";
 import { registerStepManageTool } from "./tools/step-manage-tool.ts";
 import { registerTaskManageTool } from "./tools/task-manage-tool.ts";
 import { registerWorkflowTransitionTool } from "./tools/workflow-transition.ts";
+import { renderSidebar, type SidebarState } from "./sidebar/renderer.ts";
 import { getToolsForWorkflow } from "./tools/tool-sets.ts";
 
 const CUSTOM_ENTRY_TYPE = "workflow-state";
@@ -50,6 +51,38 @@ export default function workflowExtension(pi: ExtensionAPI): void {
 		await mtimeTracker.recordMtimes(taskState.tasks.map((task) => getTaskMdPath(runtime.runId!, task.id)));
 	}
 
+	function buildSidebarState(): SidebarState {
+		const active = taskState.getActiveTaskContext();
+		const showAlignment = runtime.activeWorkflow === "alignment" || runtime.activeWorkflow === "autonomous";
+		return {
+			workflow: runtime.activeWorkflow,
+			workflowState: runtime.workflowState,
+			runId: runtime.runId,
+			tasks: taskState.tasks.map((task) => ({
+				id: task.id,
+				summary: task.summary,
+				status: task.status,
+				isCurrent: task.id === active.currentTask?.id,
+				steps: task.steps.map((step) => ({
+					id: step.id,
+					summary: step.summary,
+					status: step.status,
+					isCurrent: step.id === active.currentStep?.id,
+				})),
+			})),
+			alignment: showAlignment
+				? {
+						...alignmentState.getSummary(),
+						categories: alignmentState.categories.map((cat) => ({
+							name: cat.name,
+							relevance: cat.relevance,
+							parts: cat.parts.map((p) => ({ id: p.id, summary: p.summary, state: p.state })),
+						})),
+					}
+				: undefined,
+		};
+	}
+
 	function updateStatus(ctx: Parameters<Parameters<ExtensionAPI["on"]>[1]>[1]): void {
 		if (!ctx.hasUI) return;
 		ctx.ui.setStatus(
@@ -57,6 +90,15 @@ export default function workflowExtension(pi: ExtensionAPI): void {
 			ctx.ui.theme.fg("accent", `⚙ ${runtime.activeWorkflow}`) +
 				(runtime.workflowState !== "idle" ? ctx.ui.theme.fg("muted", `:${runtime.workflowState}`) : ""),
 		);
+
+		// Sidebar widget
+		const sidebarState = buildSidebarState();
+		const lines = renderSidebar(sidebarState);
+		if (lines.length > 1) {
+			ctx.ui.setWidget("workflow-sidebar", lines);
+		} else {
+			ctx.ui.setWidget("workflow-sidebar", undefined);
+		}
 	}
 
 	function handleSwitch(_newWorkflow: WorkflowName): void {
