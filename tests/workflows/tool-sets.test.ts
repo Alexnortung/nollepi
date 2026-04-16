@@ -3,33 +3,27 @@ import assert from "node:assert/strict";
 import { getToolsForWorkflow } from "../../extensions/workflows/tools/tool-sets.ts";
 
 describe("getToolsForWorkflow", () => {
-	const BUILTIN = ["read", "bash", "edit", "write", "grep", "find", "ls"];
+	const BASE_TOOLS = ["read", "bash", "edit", "write"];
+	const EXTRA_TOOLS = ["grep", "find", "ls"];
+	const WORKFLOW_TOOLS = ["workflow_switch", "workflow_state", "workflow_transition"];
 
-	it("returns builtin tools for base", () => {
+	it("returns base tools for base", () => {
 		const tools = getToolsForWorkflow("base", "idle");
-		assert.deepEqual(tools, [...BUILTIN, "workflow_switch", "workflow_state", "workflow_transition"]);
+		assert.deepEqual(tools, [...BASE_TOOLS, ...WORKFLOW_TOOLS]);
 	});
 
-	it("returns builtin + workflow tools for superpowers", () => {
+	it("returns base tools for superpowers", () => {
 		const tools = getToolsForWorkflow("superpowers", "idle");
-		assert.ok(tools.includes("workflow_switch"));
-		assert.ok(tools.includes("workflow_state"));
-		assert.ok(tools.includes("workflow_transition"));
-		for (const t of BUILTIN) assert.ok(tools.includes(t));
+		assert.deepEqual(tools, [...BASE_TOOLS, ...WORKFLOW_TOOLS]);
 	});
 
-	it("returns alignment tools for alignment", () => {
+	it("returns base tools for alignment", () => {
 		const tools = getToolsForWorkflow("alignment", "intake");
-		assert.ok(tools.includes("workflow_state"));
-		assert.ok(tools.includes("workflow_switch"));
-		assert.ok(tools.includes("workflow_transition"));
-		for (const t of BUILTIN) assert.ok(tools.includes(t));
+		assert.deepEqual(tools, [...BASE_TOOLS, ...WORKFLOW_TOOLS]);
 	});
 
-	it("returns autonomous tools for autonomous", () => {
+	it("returns base plus extra tools for autonomous", () => {
 		const tools = getToolsForWorkflow("autonomous", "intake");
-		assert.ok(tools.includes("workflow_state"));
-		assert.ok(tools.includes("workflow_transition"));
-		for (const t of BUILTIN) assert.ok(tools.includes(t));
+		assert.deepEqual(tools, [...BASE_TOOLS, ...WORKFLOW_TOOLS, ...EXTRA_TOOLS]);
 	});
 });
