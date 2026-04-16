@@ -2,6 +2,7 @@ import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
 import { TaskState } from "../state/task-state.ts";
 import { applyTaskCommit } from "./task-commit.ts";
+import type { TaskStatus } from "../state/task-state.ts";
 
 export const taskCommitSchema = Type.Object({
 	taskId: Type.String(),
@@ -22,7 +23,7 @@ export function registerTaskCommitTool(
 		parameters: taskCommitSchema,
 		async execute(_toolCallId, params) {
 			const state = getTaskState();
-			applyTaskCommit(state, params);
+			applyTaskCommit(state, { ...params, status: params.status as TaskStatus | undefined });
 			onChange();
 			const task = state.tasks.find((item) => item.id === params.taskId);
 			return {

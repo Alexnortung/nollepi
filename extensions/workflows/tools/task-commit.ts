@@ -1,12 +1,12 @@
-import { TaskState } from "../state/task-state.ts";
+import { TaskState, type TaskStatus } from "../state/task-state.ts";
 
 export function applyTaskCommit(
 	state: TaskState,
-	input: { taskId: string; commitHash: string; status?: string },
+	input: { taskId: string; commitHash: string; status?: TaskStatus },
 ): TaskState {
 	state.recordTaskCommit(input.taskId, input.commitHash);
 	if (input.status) {
-		state.updateTask(input.taskId, { status: input.status as any });
+		state.updateTask(input.taskId, { status: input.status });
 	}
 	state.currentTaskId = input.taskId;
 	return state;

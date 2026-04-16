@@ -1,6 +1,13 @@
-import { TaskState } from "../state/task-state.ts";
+import { TaskState, type TaskStatus } from "../state/task-state.ts";
 
-export function applyTaskAction(state: TaskState, input: any): TaskState {
+export type TaskAction =
+	| { action: "create"; summary: string; description: string; alignmentNeeded?: boolean }
+	| { action: "update"; taskId: string; summary?: string; description?: string; status?: TaskStatus; alignmentNeeded?: boolean }
+	| { action: "split"; taskId: string; replacements: Array<{ summary: string; description: string; alignmentNeeded: boolean }> }
+	| { action: "merge"; taskIds: string[]; summary: string; description: string; alignmentNeeded?: boolean }
+	| { action: "select"; taskId: string };
+
+export function applyTaskAction(state: TaskState, input: TaskAction): TaskState {
 	switch (input.action) {
 		case "create":
 			state.addTask({
@@ -30,7 +37,5 @@ export function applyTaskAction(state: TaskState, input: any): TaskState {
 		case "select":
 			state.selectCurrentTask(input.taskId);
 			return state;
-		default:
-			throw new Error(`Unknown action: ${input.action}`);
 	}
 }

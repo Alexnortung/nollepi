@@ -1,6 +1,11 @@
-import { TaskState } from "../state/task-state.ts";
+import { TaskState, type StepStatus } from "../state/task-state.ts";
 
-export function applyStepAction(state: TaskState, input: any): TaskState {
+export type StepAction =
+	| { action: "create"; taskId: string; summary: string; description: string; hasArtifact?: boolean; artifactPath?: string }
+	| { action: "update"; taskId: string; stepId: string; summary?: string; description?: string; status?: StepStatus; hasArtifact?: boolean; artifactPath?: string }
+	| { action: "complete"; taskId: string; stepId: string };
+
+export function applyStepAction(state: TaskState, input: StepAction): TaskState {
 	switch (input.action) {
 		case "create": {
 			const step = state.addStep({
@@ -30,7 +35,5 @@ export function applyStepAction(state: TaskState, input: any): TaskState {
 			state.currentTaskId = input.taskId;
 			state.currentStepId = input.stepId;
 			return state;
-		default:
-			throw new Error(`Unknown action: ${input.action}`);
 	}
 }
