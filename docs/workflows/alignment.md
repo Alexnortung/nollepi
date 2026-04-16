@@ -57,11 +57,19 @@ Each task should normally go through task-level mental alignment before executio
 
 The human may explicitly say "just go" for a task, which skips additional task-level alignment for that task.
 
+In v1, the orchestrator may dispatch subagents during execution:
+
+- an **investigator** when alignment or implementation is blocked by missing repo facts
+- a **builder** when the task is aligned strongly enough to implement
+- a **reviewer** after implementation exists and before the human review surface
+
+The orchestrator should remain the visible owner of the task. Subagents support execution, but do not replace the orchestrator’s responsibility for alignment, explanation, or workflow progression.
+
 After execution:
 
-- the agent explains what changed
+- the orchestrator explains what changed
 - the human reviews the code
-- the agent takes the human’s review seriously and addresses requested changes
+- the orchestrator takes the human’s review seriously and addresses requested changes
 - if the human made manual edits, the agent must not overwrite them unless the change is discussed and allowed
 - once the human approves the task, the task can be committed if not already committed
 
