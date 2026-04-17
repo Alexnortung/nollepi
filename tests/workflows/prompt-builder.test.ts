@@ -41,6 +41,8 @@ describe("buildWorkflowPrompt", () => {
 		const prompt = buildWorkflowPrompt(runtime);
 		assert.match(prompt, /including a proposed commit message/i);
 		assert.match(prompt, /transition directly to next-task or finish/i);
+		assert.match(prompt, /existing commit hash/i);
+		assert.match(prompt, /duplicate commit/i);
 	});
 
 	it("returns autonomous instructions for autonomous workflow", () => {

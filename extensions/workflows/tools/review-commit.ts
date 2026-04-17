@@ -30,6 +30,10 @@ function readHeadCommitHash(cwd: string): string {
 	return runGit(cwd, ["rev-parse", "HEAD"]);
 }
 
+function verifyCommitHash(cwd: string, commitHash: string): string {
+	return runGit(cwd, ["rev-parse", "--verify", `${commitHash}^{commit}`]);
+}
+
 function buildFallbackCommitMessage(task: WorkflowTask): string {
 	return `feat(workflows): ${task.summary}`;
 }
@@ -46,10 +50,25 @@ export function applyReviewCommit(input: ReviewCommitInput): ReviewCommitResult 
 	const task = input.taskState.tasks.find((item) => item.id === input.taskId);
 	if (!task) throw new Error(`Unknown task: ${input.taskId}`);
 
+	if (input.commitIntent === "existing" && !input.commitHash) {
+		throw new Error("commitHash is required when commitIntent is existing.");
+	}
+
 	if (input.commitHash) {
-		recordTaskCommit(input.taskState, input.taskId, input.commitHash);
+		const verifiedHash = verifyCommitHash(input.cwd, input.commitHash);
+		if (input.commitIntent === "existing") {
+			if (hasUncommittedChanges(input.cwd)) {
+				throw new Error("Existing review commits require a clean working tree.");
+			}
+			const headCommitHash = readHeadCommitHash(input.cwd);
+			if (verifiedHash !== headCommitHash) {
+				throw new Error("commitHash must match HEAD when commitIntent is existing.");
+			}
+		}
+
+		recordTaskCommit(input.taskState, input.taskId, verifiedHash);
 		return {
-			commitHash: input.commitHash,
+			commitHash: verifiedHash,
 			committed: false,
 			skipped: false,
 		};
@@ -68,13 +87,6 @@ export function applyReviewCommit(input: ReviewCommitInput): ReviewCommitResult 
 			};
 		}
 
-		return {
-			committed: false,
-			skipped: true,
-		};
-	}
-
-	if (input.commitIntent === "existing") {
 		return {
 			committed: false,
 			skipped: true,
