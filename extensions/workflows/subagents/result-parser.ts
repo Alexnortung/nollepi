@@ -58,6 +58,15 @@ export function parseSubagentResult(text: string): SubagentResult {
 	const payload = extractResultJsonPayload(text);
 	if (!payload) throw new Error("Missing RESULT_JSON block in subagent output.");
 	const parsed: unknown = JSON.parse(payload);
-	if (!isSubagentResult(parsed)) throw new Error("Invalid subagent result payload.");
+	if (!parsed || typeof parsed !== "object") {
+		throw new Error("Invalid subagent result payload: expected a JSON object.");
+	}
+	const record = parsed as Record<string, unknown>;
+	if (typeof record.role !== "string" || !record.role.trim()) {
+		throw new Error("Invalid subagent result payload: missing top-level role.");
+	}
+	if (!isSubagentResult(parsed)) {
+		throw new Error(`Invalid subagent result payload: unsupported role "${record.role}".`);
+	}
 	return parsed;
 }

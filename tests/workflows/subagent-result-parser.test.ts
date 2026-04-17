@@ -46,4 +46,9 @@ describe("parseSubagentResult", () => {
 	it("throws when RESULT_JSON block is missing", () => {
 		assert.throws(() => parseSubagentResult("just prose"), /RESULT_JSON/);
 	});
+
+	it("mentions the missing top-level role when the payload is malformed", () => {
+		const text = `RESULT_JSON:\n{"verdict":"pass","issues":[],"verificationGaps":[],"suggestedNextAction":"Ship it"}`;
+		assert.throws(() => parseSubagentResult(text), /role/i);
+	});
 });
