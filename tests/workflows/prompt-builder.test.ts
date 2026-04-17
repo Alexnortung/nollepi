@@ -49,6 +49,28 @@ describe("buildWorkflowPrompt", () => {
 		assert.match(prompt, /changedFiles/i);
 	});
 
+	it("alignment task-alignment guidance mentions routed task orchestrator session", () => {
+		const runtime = createWorkflowRuntime({
+			activeWorkflow: "alignment",
+			workflowState: "task-alignment",
+			runId: undefined,
+		});
+		const prompt = buildWorkflowPrompt(runtime);
+		assert.match(prompt, /route the human's task-state input/i);
+		assert.match(prompt, /literal spawned task orchestrator session/i);
+	});
+
+	it("alignment task-execution guidance keeps routing input to the task orchestrator session", () => {
+		const runtime = createWorkflowRuntime({
+			activeWorkflow: "alignment",
+			workflowState: "task-execution",
+			runId: undefined,
+		});
+		const prompt = buildWorkflowPrompt(runtime);
+		assert.match(prompt, /keep routing task-state input/i);
+		assert.match(prompt, /task-scoped follow-up stays local/i);
+	});
+
 	it("alignment next-task guidance presents outcome and waits for human direction", () => {
 		const runtime = createWorkflowRuntime({
 			activeWorkflow: "alignment",
@@ -60,6 +82,17 @@ describe("buildWorkflowPrompt", () => {
 		assert.match(prompt, /remaining approved task list/i);
 		assert.match(prompt, /human leads/i);
 		assert.doesNotMatch(prompt, /record_outcome/i);
+	});
+
+	it("alignment human-review guidance keeps routing input to the task orchestrator session", () => {
+		const runtime = createWorkflowRuntime({
+			activeWorkflow: "alignment",
+			workflowState: "human-review",
+			runId: undefined,
+		});
+		const prompt = buildWorkflowPrompt(runtime);
+		assert.match(prompt, /keep routing task-state input/i);
+		assert.match(prompt, /literal spawned task orchestrator session/i);
 	});
 
 	it("returns autonomous instructions for autonomous workflow", () => {

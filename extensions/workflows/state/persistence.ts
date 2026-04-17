@@ -2,6 +2,7 @@ import { AlignmentState, type AlignmentSnapshot } from "./alignment-state.ts";
 import { SubagentState } from "./subagent-state.ts";
 import type { SubagentRunSnapshot } from "../subagents/contracts.ts";
 import { TaskState, type TaskRuntimeState } from "./task-state.ts";
+import { TaskOrchestratorState, type TaskOrchestratorSnapshot } from "./task-orchestrator-state.ts";
 import {
 	createWorkflowRuntime,
 	type WorkflowRuntime,
@@ -14,6 +15,7 @@ export interface WorkflowExtensionState {
 	tasks?: TaskRuntimeState;
 	alignment?: AlignmentSnapshot;
 	subagents?: SubagentRunSnapshot;
+	taskOrchestrator?: TaskOrchestratorSnapshot;
 }
 
 export function serializeState(
@@ -22,6 +24,7 @@ export function serializeState(
 	taskState?: TaskState,
 	alignmentState?: AlignmentState,
 	subagentState?: SubagentState,
+	taskOrchestratorState?: TaskOrchestratorState,
 ): WorkflowExtensionState {
 	return {
 		workflow: runtime.serialize(),
@@ -29,6 +32,7 @@ export function serializeState(
 		tasks: taskState?.serialize(),
 		alignment: alignmentState?.serialize(),
 		subagents: subagentState?.serialize(),
+		taskOrchestrator: taskOrchestratorState?.serialize(),
 	};
 }
 
@@ -40,6 +44,7 @@ export function restoreState(
 	taskState: TaskState;
 	alignmentState: AlignmentState;
 	subagentState: SubagentState;
+	taskOrchestratorState: TaskOrchestratorState;
 } {
 	if (!data) {
 		return {
@@ -48,6 +53,7 @@ export function restoreState(
 			taskState: new TaskState(),
 			alignmentState: new AlignmentState(),
 			subagentState: new SubagentState(),
+			taskOrchestratorState: new TaskOrchestratorState(),
 		};
 	}
 
@@ -57,5 +63,6 @@ export function restoreState(
 		taskState: TaskState.restore(data.tasks),
 		alignmentState: AlignmentState.restore(data.alignment),
 		subagentState: SubagentState.restore(data.subagents),
+		taskOrchestratorState: TaskOrchestratorState.restore(data.taskOrchestrator),
 	};
 }

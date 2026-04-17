@@ -6,6 +6,7 @@ import {
 	type WorkflowExtensionState,
 } from "../../extensions/workflows/state/persistence.ts";
 import { SubagentState } from "../../extensions/workflows/state/subagent-state.ts";
+import { TaskOrchestratorState } from "../../extensions/workflows/state/task-orchestrator-state.ts";
 import { createWorkflowRuntime } from "../../extensions/workflows/state/workflow-state.ts";
 
 describe("persistence", () => {
@@ -50,6 +51,19 @@ describe("persistence", () => {
 		assert.equal(restored.subagentState.getActiveRuns().length, 0);
 		assert.equal(restored.subagentState.runs.length, 1);
 		assert.equal(restored.subagentState.runs[0].id, finished.id);
+	});
+
+	it("serializes and restores task orchestrator state", () => {
+		const runtime = createWorkflowRuntime();
+		const mtimes = new Map<string, number>();
+		const taskOrchestratorState = new TaskOrchestratorState();
+		taskOrchestratorState.startOrReuseSession({ taskId: "01-task", taskPreview: "Task", sessionFile: "/tmp/task.jsonl" });
+		taskOrchestratorState.startTurn();
+
+		const serialized = serializeState(runtime, mtimes, undefined, undefined, undefined, taskOrchestratorState);
+		const restored = restoreState(serialized);
+		assert.equal(restored.taskOrchestratorState.getSession()?.taskId, "01-task");
+		assert.equal(restored.taskOrchestratorState.getSession()?.status, "waiting");
 	});
 
 	it("restoreState returns defaults for undefined input", () => {
