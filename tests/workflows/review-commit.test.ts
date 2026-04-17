@@ -81,6 +81,61 @@ describe("applyReviewCommit", () => {
 		assert.equal(runGit(cwd, ["rev-parse", "HEAD"]), existingHash);
 	});
 
+	it("rejects existing review commits without a hash", () => {
+		const cwd = initRepo();
+		runGit(cwd, ["commit", "--allow-empty", "-m", "feat(workflows): initial state"]);
+
+		const taskState = new TaskState();
+		taskState.addTask({
+			summary: "Implement review-owned commit behavior",
+			description: "Task description",
+			alignmentNeeded: true,
+		});
+
+		assert.throws(
+			() =>
+				applyReviewCommit({
+					cwd,
+					taskState,
+					taskId: "01-implement-review-owned-commit-behavior",
+					commitIntent: "existing",
+				}),
+			/commitHash is required when commitIntent is existing/i,
+		);
+	});
+
+	it("rejects stale existing commit hashes", () => {
+		const cwd = initRepo();
+		const filePath = path.join(cwd, "change.txt");
+		fs.writeFileSync(filePath, "first\n");
+		runGit(cwd, ["add", "-A"]);
+		runGit(cwd, ["commit", "-m", "feat(workflows): first commit"]);
+		const staleHash = runGit(cwd, ["rev-parse", "HEAD"]);
+
+		fs.writeFileSync(filePath, "second\n");
+		runGit(cwd, ["add", "-A"]);
+		runGit(cwd, ["commit", "-m", "feat(workflows): second commit"]);
+
+		const taskState = new TaskState();
+		taskState.addTask({
+			summary: "Implement review-owned commit behavior",
+			description: "Task description",
+			alignmentNeeded: true,
+		});
+
+		assert.throws(
+			() =>
+				applyReviewCommit({
+					cwd,
+					taskState,
+					taskId: "01-implement-review-owned-commit-behavior",
+					commitIntent: "existing",
+					commitHash: staleHash,
+				}),
+			/commitHash must match HEAD when commitIntent is existing/i,
+		);
+	});
+
 	it("records the existing HEAD hash when review exits with a clean tree", () => {
 		const cwd = initRepo();
 		runGit(cwd, ["commit", "--allow-empty", "-m", "feat(workflows): initial state"]);

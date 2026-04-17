@@ -57,6 +57,13 @@ export function normalizeWorkflowTransitionEvent(
 
 	const commitIntent = input.commitIntent ?? (input.commitHash ? "existing" : input.commitMessage ? "create" : undefined);
 
+	if (commitIntent === "existing" && !input.commitHash) {
+		return {
+			ok: false,
+			error: "commitHash is required when commitIntent is existing.",
+		};
+	}
+
 	if (input.commitHash && commitIntent !== "existing") {
 		return {
 			ok: false,

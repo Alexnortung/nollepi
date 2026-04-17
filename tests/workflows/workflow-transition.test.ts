@@ -91,4 +91,19 @@ describe("normalizeWorkflowTransitionEvent", () => {
 			error: "commitHash can only be sent when commitIntent is existing.",
 		});
 	});
+
+	it("rejects existing commit intent without a commit hash", () => {
+		const runtime = createWorkflowRuntime();
+		moveToAlignmentHumanReview(runtime);
+
+		const result = normalizeWorkflowTransitionEvent(runtime, {
+			state: "next-task",
+			commitIntent: "existing",
+		});
+
+		assert.deepEqual(result, {
+			ok: false,
+			error: "commitHash is required when commitIntent is existing.",
+		});
+	});
 });

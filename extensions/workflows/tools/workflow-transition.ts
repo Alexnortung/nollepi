@@ -23,6 +23,7 @@ export function registerWorkflowTransitionTool(
 			"Always check workflow_state before transitioning to see which transitions are valid.",
 			"Transitions drive the workflow forward — use them to mark progress through the workflow stages.",
 			"When alignment human-review ends directly in next-task or finish, include commitIntent / commitMessage / commitHash if the review also settled commit handling.",
+			"If the human already committed, include the existing commit hash and do not create a duplicate commit.",
 		],
 		parameters: Type.Object({
 			state: Type.String({ description: "Target state to transition to" }),
