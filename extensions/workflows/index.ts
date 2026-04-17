@@ -11,17 +11,20 @@ import { renderSidebar, type SidebarState } from "./sidebar/renderer.ts";
 import { AlignmentState } from "./state/alignment-state.ts";
 import { restoreState, serializeState, type WorkflowExtensionState } from "./state/persistence.ts";
 import { SubagentState } from "./state/subagent-state.ts";
-import { TaskOrchestratorState, type TaskOrchestratorResult } from "./state/task-orchestrator-state.ts";
+import { TaskOrchestratorState, type TaskOrchestratorDispatchRequest, type TaskOrchestratorResult } from "./state/task-orchestrator-state.ts";
 import { TaskState } from "./state/task-state.ts";
 import {
 	createWorkflowRuntime,
 	type WorkflowName,
 	type WorkflowRuntime,
 } from "./state/workflow-state.ts";
+import { shouldRouteSpecialistResultToTaskOrchestrator } from "./task-orchestrator/follow-up-routing.ts";
 import { buildTaskOrchestratorPacket } from "./task-orchestrator/packet-builder.ts";
 import { createTaskOrchestratorSessionFile, spawnTaskOrchestratorTurn } from "./task-orchestrator/spawner.ts";
+import { spawnSubagentProcess } from "./subagents/spawner.ts";
 import { registerAlignmentManageTool } from "./tools/alignment-manage-tool.ts";
 import { registerDispatchSubagentTool } from "./tools/dispatch-subagent-tool.ts";
+import { prepareSubagentDispatch, shouldAutoTriggerSubagentResult } from "./tools/dispatch-subagent.ts";
 import { registerWorkflowStateTool } from "./tools/workflow-info.ts";
 import { registerStepManageTool } from "./tools/step-manage-tool.ts";
 import { registerTaskCommitTool } from "./tools/task-commit-tool.ts";
@@ -81,7 +84,11 @@ export default function workflowExtension(pi: ExtensionAPI): void {
 			taskState.updateTask(active.currentTask.id, { status: "in-progress" });
 		}
 
-		if (runtime.activeWorkflow === "alignment" && runtime.workflowState === "human-review" && (result.requestedTransition === "next-task" || result.requestedTransition === "finish")) {
+		if (
+			runtime.activeWorkflow === "alignment" &&
+			runtime.workflowState === "human-review" &&
+			(result.requestedTransition === "next-task" || result.requestedTransition === "finish")
+		) {
 			const commitResult = applyReviewCommit({
 				cwd: process.cwd(),
 				taskState,
@@ -97,7 +104,11 @@ export default function workflowExtension(pi: ExtensionAPI): void {
 
 		runtime.transition(result.requestedTransition);
 		if (result.requestedTransition === "next-task" || result.requestedTransition === "finish") {
-			taskOrchestratorState.closeSession();
+			if (countActiveTaskSpecialists(active.currentTask.id) > 0) {
+				taskOrchestratorState.requestCloseAfterDrain();
+			} else {
+				taskOrchestratorState.closeSession();
+			}
 		}
 		applyToolSet();
 		persistState();
@@ -106,12 +117,137 @@ export default function workflowExtension(pi: ExtensionAPI): void {
 		refreshUi();
 	}
 
-	function forwardToTaskOrchestrator(ctx: WorkflowContext, userMessage: string): void {
+	function countActiveTaskSpecialists(taskId?: string): number {
+		return subagentState.getActiveRuns().filter((run) => run.taskId === taskId).length;
+	}
+
+	function shouldAutoRouteSpecialistResultToTaskOrchestrator(taskId?: string): boolean {
+		return shouldRouteSpecialistResultToTaskOrchestrator(taskOrchestratorState.getSession(), taskId);
+	}
+
+	function buildSpecialistFollowUpMessage(runId: number, role: string, result: unknown): string {
+		return [
+			`Specialist ${role} #${runId} finished for this task.`,
+			"Integrate this result and decide the next task-scoped action.",
+			"",
+			"Structured result:",
+			JSON.stringify(result, null, 2),
+		].join("\n");
+	}
+
+	function scheduleTaskOrchestratorFollowUp(message: string, ctx?: WorkflowContext): void {
+		const session = taskOrchestratorState.getSession();
+		if (!session || session.status === "closed") return;
+		if (session.status === "running") {
+			taskOrchestratorState.enqueueFollowUpMessage(message);
+			persistState();
+			refreshUi();
+			return;
+		}
+		runTaskOrchestratorTurn(message, { ctx });
+	}
+
+	function flushQueuedTaskOrchestratorFollowUp(ctx?: WorkflowContext): void {
+		const session = taskOrchestratorState.getSession();
+		if (!session || session.status !== "waiting") return;
+		const nextMessage = taskOrchestratorState.dequeueFollowUpMessage();
+		if (!nextMessage) {
+			taskOrchestratorState.closeIfDrained(countActiveTaskSpecialists(session.taskId));
+			persistState();
+			refreshUi();
+			return;
+		}
+		persistState();
+		refreshUi();
+		runTaskOrchestratorTurn(nextMessage, { ctx });
+	}
+
+	function executeTaskOrchestratorDispatchRequests(requests: TaskOrchestratorDispatchRequest[], ctx?: WorkflowContext): void {
+		for (const request of requests) {
+			try {
+				const prepared = prepareSubagentDispatch(
+					{
+						runtime,
+						taskState,
+						alignmentState,
+						subagentState,
+					},
+					request,
+				);
+
+				persistState();
+				refreshUi();
+
+				spawnSubagentProcess(pi, ctx?.cwd ?? process.cwd(), prepared.run, prepared.packet, {
+					onText: (delta) => {
+						subagentState.appendText(prepared.run.id, delta);
+						persistState();
+						refreshUi();
+					},
+					onToolCall: () => {
+						subagentState.recordToolCall(prepared.run.id);
+						persistState();
+						refreshUi();
+					},
+					onFinish: (result) => {
+						subagentState.finishRun(prepared.run.id, result, "done");
+						persistState();
+						refreshUi();
+						pi.sendMessage({
+							customType: "workflow-subagent-result",
+							content: JSON.stringify({ runId: prepared.run.id, role: prepared.run.role, result }, null, 2),
+							details: { runId: prepared.run.id, role: prepared.run.role, result },
+							display: false,
+						}, {
+							deliverAs: "followUp",
+							triggerTurn: !shouldAutoRouteSpecialistResultToTaskOrchestrator(prepared.run.taskId) && shouldAutoTriggerSubagentResult(runtime.activeWorkflow, latestUiContext?.isIdle() ?? false),
+						});
+						pi.sendMessage({
+							customType: "workflow-subagent-summary",
+							content: `${prepared.run.role} #${prepared.run.id} finished.`,
+							details: { runId: prepared.run.id, role: prepared.run.role },
+							display: true,
+						}, { deliverAs: "followUp", triggerTurn: false });
+						if (shouldAutoRouteSpecialistResultToTaskOrchestrator(prepared.run.taskId)) {
+							scheduleTaskOrchestratorFollowUp(buildSpecialistFollowUpMessage(prepared.run.id, prepared.run.role, result), ctx);
+						}
+					},
+					onError: (message) => {
+						subagentState.failRun(prepared.run.id, message);
+						persistState();
+						refreshUi();
+						pi.sendMessage({
+							customType: "workflow-subagent-summary",
+							content: `${prepared.run.role} #${prepared.run.id} failed: ${message}`,
+							details: { runId: prepared.run.id, role: prepared.run.role, error: message },
+							display: true,
+						}, { deliverAs: "followUp", triggerTurn: false });
+						if (shouldAutoRouteSpecialistResultToTaskOrchestrator(prepared.run.taskId)) {
+							scheduleTaskOrchestratorFollowUp(
+								`A requested ${prepared.run.role} dispatch failed. Explain the failure and decide the next task-scoped action.\n\nError:\n${message}`,
+								ctx,
+							);
+						}
+					},
+				});
+			} catch (error: unknown) {
+				const message = error instanceof Error ? error.message : String(error);
+				pi.sendMessage({
+					customType: "workflow-task-orchestrator-message",
+					content: `Specialist dispatch request failed: ${message}`,
+					display: true,
+					details: { error: message, request },
+				});
+			}
+		}
+	}
+
+	function runTaskOrchestratorTurn(userMessage: string, options?: { ctx?: WorkflowContext }): void {
 		const active = taskState.getActiveTaskContext();
 		if (!active.currentTask) return;
 		const existing = taskOrchestratorState.getSession();
 		if (existing?.status === "running") {
-			if (ctx.hasUI) ctx.ui.notify("Task orchestrator is still running.", "warning");
+			if (options?.ctx?.hasUI) options.ctx.ui.notify("Task orchestrator is still running.", "warning");
 			return;
 		}
 
@@ -131,7 +267,7 @@ export default function workflowExtension(pi: ExtensionAPI): void {
 			subagentState,
 		});
 
-		spawnTaskOrchestratorTurn(pi, ctx.cwd, session, packet, userMessage, {
+		spawnTaskOrchestratorTurn(pi, options?.ctx?.cwd ?? process.cwd(), session, packet, userMessage, {
 			onText: (delta) => {
 				taskOrchestratorState.appendText(delta);
 				persistState();
@@ -143,9 +279,6 @@ export default function workflowExtension(pi: ExtensionAPI): void {
 				refreshUi();
 			},
 			onFinish: (result, displayText) => {
-				taskOrchestratorState.finishTurn(result, displayText);
-				persistState();
-				refreshUi();
 				pi.sendMessage({
 					customType: "workflow-task-orchestrator-message",
 					content: displayText || result.summary,
@@ -154,14 +287,35 @@ export default function workflowExtension(pi: ExtensionAPI): void {
 						taskId: active.currentTask?.id,
 						status: result.status,
 						requestedTransition: result.requestedTransition,
+						dispatchRequestCount: result.dispatchRequests?.length ?? 0,
 					},
 				});
-				void applyTaskOrchestratorHandoff(result).catch((error: unknown) => {
+				void (async () => {
+					if (result.status === "handoff" && result.requestedTransition === "task-execution") {
+						await applyTaskOrchestratorHandoff(result);
+					}
+					if (result.dispatchRequests && result.dispatchRequests.length > 0 && result.requestedTransition !== "next-task" && result.requestedTransition !== "finish") {
+						executeTaskOrchestratorDispatchRequests(result.dispatchRequests, options?.ctx);
+					}
+					if (
+						result.status === "handoff" &&
+						result.requestedTransition &&
+						result.requestedTransition !== "task-execution"
+					) {
+						await applyTaskOrchestratorHandoff(result);
+					}
+					if (taskOrchestratorState.getSession()?.status !== "closed") {
+						taskOrchestratorState.finishTurn(result, displayText);
+						persistState();
+						refreshUi();
+						flushQueuedTaskOrchestratorFollowUp(options?.ctx);
+					}
+				})().catch((error: unknown) => {
 					const message = error instanceof Error ? error.message : String(error);
 					taskOrchestratorState.failTurn(message);
 					persistState();
 					refreshUi();
-					if (ctx.hasUI) ctx.ui.notify(`Task orchestrator handoff failed: ${message}`, "error");
+					if (options?.ctx?.hasUI) options.ctx.ui.notify(`Task orchestrator handoff failed: ${message}`, "error");
 				});
 			},
 			onError: (message) => {
@@ -176,6 +330,10 @@ export default function workflowExtension(pi: ExtensionAPI): void {
 				});
 			},
 		});
+	}
+
+	function forwardToTaskOrchestrator(ctx: WorkflowContext, userMessage: string): void {
+		runTaskOrchestratorTurn(userMessage, { ctx });
 	}
 
 	function applyToolSet(): void {
@@ -380,7 +538,12 @@ export default function workflowExtension(pi: ExtensionAPI): void {
 		},
 		(event) => {
 			if (event.newState === "next-task" || event.newState === "finish") {
-				taskOrchestratorState.closeSession();
+				const active = taskState.getActiveTaskContext();
+				if (active.currentTask && countActiveTaskSpecialists(active.currentTask.id) > 0) {
+					taskOrchestratorState.requestCloseAfterDrain();
+				} else {
+					taskOrchestratorState.closeSession();
+				}
 			}
 			applyToolSet();
 			persistState();
