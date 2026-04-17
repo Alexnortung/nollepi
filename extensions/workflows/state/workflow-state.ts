@@ -89,9 +89,7 @@ export function createWorkflowRuntime(snapshot?: WorkflowSnapshot): WorkflowRunt
 			}
 			this.activeWorkflow = workflow;
 			this.workflowState = "idle";
-			if (workflow === "base") {
-				this.runId = undefined;
-			}
+			this.runId = undefined;
 		},
 
 		transition(newState: string): void {

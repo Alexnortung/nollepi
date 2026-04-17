@@ -1,6 +1,14 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { renderWorkflowMd, renderTaskMd, renderStepMd } from "../../extensions/workflows/artifacts/writer.ts";
+import * as fs from "node:fs/promises";
+import * as os from "node:os";
+import * as path from "node:path";
+import {
+	renderWorkflowMd,
+	renderTaskMd,
+	renderStepMd,
+	writeWorkflowArtifacts,
+} from "../../extensions/workflows/artifacts/writer.ts";
 import { TaskState } from "../../extensions/workflows/state/task-state.ts";
 
 describe("artifact writer", () => {
@@ -65,5 +73,56 @@ describe("artifact writer", () => {
 		assert.match(markdown, /^# Variant prop contract$/m);
 		assert.match(markdown, /^- Step id: step-2$/m);
 		assert.match(markdown, /^- Status: pending$/m);
+	});
+
+	it("creates docs/.workflows and the run folder as soon as workflow data exists", async () => {
+		const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "workflow-writer-"));
+		const state = new TaskState();
+		const runId = "2026-04-17-01-alignment-button-variants";
+
+		await writeWorkflowArtifacts(tmpDir, {
+			runId,
+			title: "Button variants",
+			workflowType: "alignment",
+			workflowState: "intake",
+			taskState: state,
+		});
+
+		assert.equal((await fs.stat(path.join(tmpDir, "docs/.workflows"))).isDirectory(), true);
+		assert.equal((await fs.stat(path.join(tmpDir, "docs/.workflows/runs"))).isDirectory(), true);
+		assert.equal((await fs.stat(path.join(tmpDir, `docs/.workflows/runs/${runId}`))).isDirectory(), true);
+		assert.equal((await fs.stat(path.join(tmpDir, `docs/.workflows/runs/${runId}/workflow.md`))).isFile(), true);
+
+		await fs.rm(tmpDir, { recursive: true, force: true });
+	});
+
+	it("keeps the run folder writable once task data is available", async () => {
+		const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "workflow-writer-"));
+		const state = new TaskState();
+		state.addTask({
+			summary: "Update domain types",
+			description: "Commit-worthy change",
+			alignmentNeeded: true,
+		});
+		const runId = "2026-04-17-01-alignment-button-variants";
+
+		await writeWorkflowArtifacts(tmpDir, {
+			runId,
+			title: "Button variants",
+			workflowType: "alignment",
+			workflowState: "task-proposal",
+			taskState: state,
+		});
+
+		assert.equal(
+			(await fs.stat(path.join(tmpDir, `docs/.workflows/runs/${runId}/tasks/01-update-domain-types`))).isDirectory(),
+			true,
+		);
+		assert.equal(
+			(await fs.stat(path.join(tmpDir, `docs/.workflows/runs/${runId}/tasks/01-update-domain-types/task.md`))).isFile(),
+			true,
+		);
+
+		await fs.rm(tmpDir, { recursive: true, force: true });
 	});
 });
