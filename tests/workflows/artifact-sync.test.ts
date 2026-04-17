@@ -39,10 +39,48 @@ describe("artifact sync", () => {
 		);
 
 		assert.equal(restored.warnings.length, 0);
+		assert.equal(restored.workflow.title, "Button variants");
+		assert.equal(restored.workflow.workflowType, "alignment");
+		assert.equal(restored.workflow.workflowState, "task-execution");
+		assert.equal(restored.taskState.runTitle, "Button variants");
 		assert.equal(restored.taskState.tasks.length, 1);
 		assert.equal(restored.taskState.tasks[0].id, "01-update-domain-types");
+		assert.equal(restored.taskState.tasks[0].summary, "Update domain types");
 		assert.equal(restored.taskState.tasks[0].steps.length, 1);
 		assert.deepEqual(restored.taskState.tasks[0].commitHashes, ["abc123"]);
+
+		await fs.rm(tmpDir, { recursive: true, force: true });
+	});
+
+	it("reads user edits from task and step artifacts", async () => {
+		const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "workflow-artifacts-"));
+		const runId = "2026-04-16-01-alignment-button-variants";
+		const workflowDir = path.join(tmpDir, "docs/.workflows/runs", runId);
+		const taskDir = path.join(workflowDir, "tasks/01-update-domain-types");
+		await fs.mkdir(taskDir, { recursive: true });
+
+		await fs.writeFile(
+			path.join(workflowDir, "workflow.md"),
+			`# Button variants\n\n- Workflow type: alignment\n- Workflow state: task-execution\n- Run id: ${runId}\n\n## Tasks\n- [review] 01-update-domain-types — Old summary\n`,
+		);
+		await fs.writeFile(
+			path.join(taskDir, "task.md"),
+			`# Human updated summary\n\n- Task id: 01-update-domain-types\n- Status: review\n- Alignment needed: false\n- Commits: None\n\n## Description\nHuman updated description\n\n## Steps\n1. [in-progress] Review API contract (step-1-api-contract.md)\n`,
+		);
+		await fs.writeFile(
+			path.join(taskDir, "step-1-api-contract.md"),
+			`# Human updated step\n\n- Step id: step-1\n- Status: in-progress\n\n## Description\nDetailed reviewer notes\n`,
+		);
+
+		const restored = await readTaskStateFromArtifacts(tmpDir, runId);
+		assert.equal(restored.warnings.length, 0);
+		assert.equal(restored.taskState.tasks[0].summary, "Human updated summary");
+		assert.equal(restored.taskState.tasks[0].description, "Human updated description");
+		assert.equal(restored.taskState.tasks[0].status, "review");
+		assert.equal(restored.taskState.tasks[0].alignmentNeeded, false);
+		assert.equal(restored.taskState.tasks[0].steps[0].summary, "Human updated step");
+		assert.equal(restored.taskState.tasks[0].steps[0].description, "Detailed reviewer notes");
+		assert.equal(restored.taskState.tasks[0].steps[0].status, "in-progress");
 
 		await fs.rm(tmpDir, { recursive: true, force: true });
 	});

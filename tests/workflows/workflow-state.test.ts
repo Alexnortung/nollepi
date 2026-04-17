@@ -102,6 +102,29 @@ describe("WorkflowRuntime", () => {
 		assert.equal(restored.runId, "2026-04-16-01-alignment-test");
 	});
 
+	it("clears run id whenever switching workflows", () => {
+		const rt = createWorkflowRuntime();
+		rt.runId = "2026-04-16-01-base-run";
+
+		rt.switchTo("alignment");
+		assert.equal(rt.runId, undefined);
+
+		rt.runId = "2026-04-16-01-alignment-run";
+		rt.transition("intake");
+		rt.transition("high-level-alignment");
+		rt.transition("task-proposal");
+		rt.transition("task-list-alignment");
+		rt.transition("task-list-approval");
+		rt.transition("task-execution");
+		rt.transition("internal-review");
+		rt.transition("human-review");
+		rt.transition("approved");
+		rt.transition("commit");
+		rt.transition("finish");
+		rt.switchTo("autonomous");
+		assert.equal(rt.runId, undefined);
+	});
+
 	it("getValidStates returns states for current workflow", () => {
 		const rt = createWorkflowRuntime();
 		const states = rt.getValidStates();

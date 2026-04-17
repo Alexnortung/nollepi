@@ -1,7 +1,10 @@
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import * as fs from "node:fs";
+import * as path from "node:path";
 import { readTaskStateFromArtifacts } from "./artifacts/reader.ts";
 import { MtimeTracker } from "./artifacts/mtime-tracker.ts";
-import { getTaskMdPath, getWorkflowMdPath } from "./artifacts/paths.ts";
+import { buildRunId, getRunDir, getStepMdPath, getTaskMdPath, getWorkflowMdPath } from "./artifacts/paths.ts";
+import { getRunTitleCandidate, shouldCreateRunArtifacts } from "./artifacts/run-metadata.ts";
 import { writeWorkflowArtifacts } from "./artifacts/writer.ts";
 import { buildWorkflowPrompt } from "./prompts/prompt-builder.ts";
 import { renderSidebar, type SidebarState } from "./sidebar/renderer.ts";
@@ -51,17 +54,68 @@ export default function workflowExtension(pi: ExtensionAPI): void {
 		if (latestUiContext) updateStatus(latestUiContext);
 	}
 
-	async function syncArtifacts(): Promise<void> {
+	function usesArtifactRuns(): boolean {
+		return runtime.activeWorkflow === "alignment" || runtime.activeWorkflow === "autonomous";
+	}
+
+	function getTrackedArtifactPaths(runId: string): string[] {
+		return [
+			getWorkflowMdPath(runId),
+			...taskState.tasks.flatMap((task) => [
+				getTaskMdPath(runId, task.id),
+				...task.steps
+					.filter((step) => step.hasArtifact && step.artifactPath)
+					.map((step) => getStepMdPath(runId, task.id, step.artifactPath!.replace(/\.md$/, ""))),
+			]),
+		];
+	}
+
+	function ensureRunMetadata(): boolean {
+		if (!usesArtifactRuns()) return false;
+		if (!shouldCreateRunArtifacts(runtime.activeWorkflow, runtime.workflowState)) {
+			runtime.runId = undefined;
+			return false;
+		}
+
+		const runTitle = getRunTitleCandidate(taskState, alignmentState);
+		if (!runTitle) return false;
+		taskState.runTitle ??= runTitle;
+		if (runtime.runId) return true;
+
+		for (let ordinal = 1; ordinal < 1000; ordinal += 1) {
+			const candidate = buildRunId(runtime.activeWorkflow, taskState.runTitle, new Date(), ordinal);
+			if (!fs.existsSync(path.join(process.cwd(), getRunDir(candidate)))) {
+				runtime.runId = candidate;
+				return true;
+			}
+		}
+
+		throw new Error(`Unable to allocate workflow run id for ${runtime.activeWorkflow}.`);
+	}
+
+	async function recordArtifactMtimes(): Promise<void> {
+		mtimeTracker.clear();
 		if (!runtime.runId) return;
+		await mtimeTracker.recordMtimes(getTrackedArtifactPaths(runtime.runId));
+	}
+
+	async function syncArtifacts(): Promise<void> {
+		if (!usesArtifactRuns()) {
+			mtimeTracker.clear();
+			return;
+		}
+		if (!ensureRunMetadata()) {
+			mtimeTracker.clear();
+			return;
+		}
 		await writeWorkflowArtifacts(process.cwd(), {
-			runId: runtime.runId,
-			title: taskState.runTitle ?? runtime.runId,
+			runId: runtime.runId!,
+			title: taskState.runTitle ?? runtime.runId!,
 			workflowType: runtime.activeWorkflow,
 			workflowState: runtime.workflowState,
 			taskState,
 		});
-		await mtimeTracker.recordMtime(getWorkflowMdPath(runtime.runId));
-		await mtimeTracker.recordMtimes(taskState.tasks.map((task) => getTaskMdPath(runtime.runId!, task.id)));
+		await recordArtifactMtimes();
 	}
 
 	function buildSidebarState(): SidebarState {
@@ -124,6 +178,7 @@ export default function workflowExtension(pi: ExtensionAPI): void {
 	function handleSwitch(_newWorkflow: WorkflowName): void {
 		applyToolSet();
 		persistState();
+		void syncArtifacts().then(() => persistState());
 		refreshUi();
 	}
 
@@ -131,21 +186,22 @@ export default function workflowExtension(pi: ExtensionAPI): void {
 	registerWorkflowSwitchTool(pi, () => runtime, handleSwitch);
 	registerTaskManageTool(pi, () => taskState, () => {
 		persistState();
-		void syncArtifacts();
+		void syncArtifacts().then(() => persistState());
 		refreshUi();
 	});
 	registerStepManageTool(pi, () => taskState, () => {
 		persistState();
-		void syncArtifacts();
+		void syncArtifacts().then(() => persistState());
 		refreshUi();
 	});
 	registerTaskCommitTool(pi, () => taskState, () => {
 		persistState();
-		void syncArtifacts();
+		void syncArtifacts().then(() => persistState());
 		refreshUi();
 	});
 	registerAlignmentManageTool(pi, () => alignmentState, () => {
 		persistState();
+		void syncArtifacts().then(() => persistState());
 		refreshUi();
 	});
 	registerDispatchSubagentTool(pi, {
@@ -160,6 +216,7 @@ export default function workflowExtension(pi: ExtensionAPI): void {
 	registerWorkflowTransitionTool(pi, () => runtime, () => {
 		applyToolSet();
 		persistState();
+		void syncArtifacts().then(() => persistState());
 		refreshUi();
 	});
 
@@ -220,14 +277,29 @@ export default function workflowExtension(pi: ExtensionAPI): void {
 
 			const restored = await readTaskStateFromArtifacts(process.cwd(), runtime.runId);
 			taskState = restored.taskState;
-			await mtimeTracker.recordMtime(getWorkflowMdPath(runtime.runId));
-			await mtimeTracker.recordMtimes(taskState.tasks.map((task) => getTaskMdPath(runtime.runId!, task.id)));
+			const warnings = [...restored.warnings];
+			if (restored.workflow.workflowType && restored.workflow.workflowType !== runtime.activeWorkflow) {
+				warnings.push(
+					`Artifact workflow type is ${restored.workflow.workflowType}, but runtime is ${runtime.activeWorkflow}. Keeping runtime workflow.`,
+				);
+			}
+			if (restored.workflow.workflowState) {
+				if (runtime.getValidStates().includes(restored.workflow.workflowState)) {
+					runtime.workflowState = restored.workflow.workflowState;
+					applyToolSet();
+				} else {
+					warnings.push(
+						`Artifact workflow state ${restored.workflow.workflowState} is invalid for ${runtime.activeWorkflow}. Keeping runtime state ${runtime.workflowState}.`,
+					);
+				}
+			}
+			await recordArtifactMtimes();
 			persistState();
 			refreshUi();
 
 			if (ctx.hasUI) {
-				if (restored.warnings.length > 0) {
-					ctx.ui.notify(restored.warnings.join("\n"), "warning");
+				if (warnings.length > 0) {
+					ctx.ui.notify(warnings.join("\n"), "warning");
 				} else {
 					ctx.ui.notify(`Reloaded ${taskState.tasks.length} task(s) from workflow artifacts.`, "info");
 				}
@@ -247,6 +319,10 @@ export default function workflowExtension(pi: ExtensionAPI): void {
 		alignmentState = restored.alignmentState;
 		subagentState = restored.subagentState;
 		mtimeTracker.restoreFromMap(restored.artifactMtimes);
+		if (usesArtifactRuns() && !shouldCreateRunArtifacts(runtime.activeWorkflow, runtime.workflowState)) {
+			runtime.runId = undefined;
+			mtimeTracker.clear();
+		}
 		latestUiContext = ctx;
 
 		applyToolSet();
