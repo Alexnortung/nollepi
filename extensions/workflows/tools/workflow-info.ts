@@ -3,6 +3,7 @@ import { Type } from "@sinclair/typebox";
 import type { AlignmentState } from "../state/alignment-state.ts";
 import type { SubagentState } from "../state/subagent-state.ts";
 import type { TaskState } from "../state/task-state.ts";
+import type { TaskOrchestratorState } from "../state/task-orchestrator-state.ts";
 import type { WorkflowRuntime } from "../state/workflow-state.ts";
 
 export function registerWorkflowStateTool(
@@ -11,6 +12,7 @@ export function registerWorkflowStateTool(
 	getTaskState?: () => TaskState,
 	getAlignmentState?: () => AlignmentState,
 	getSubagentState?: () => SubagentState,
+	getTaskOrchestratorState?: () => TaskOrchestratorState,
 ): void {
 	pi.registerTool({
 		name: "workflow_state",
@@ -25,6 +27,7 @@ export function registerWorkflowStateTool(
 			const taskState = getTaskState?.();
 			const alignState = getAlignmentState?.();
 			const subagentState = getSubagentState?.();
+			const taskOrchestratorState = getTaskOrchestratorState?.();
 			const active = taskState?.getActiveTaskContext();
 			const alignSummary = alignState?.getSummary();
 			const result = {
@@ -39,6 +42,7 @@ export function registerWorkflowStateTool(
 				currentTask: active?.currentTask ?? null,
 				currentStep: active?.currentStep ?? null,
 				alignment: alignSummary ?? null,
+				taskOrchestrator: taskOrchestratorState?.getSession() ?? null,
 				subagents: subagentState?.runs ?? [],
 				activeSubagents: subagentState?.getActiveRuns() ?? [],
 			};

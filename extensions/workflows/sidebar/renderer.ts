@@ -43,12 +43,20 @@ export interface SidebarSubagentRun {
 	elapsedSeconds: number;
 }
 
+export interface SidebarTaskOrchestrator {
+	status: string;
+	taskPreview: string;
+	elapsedSeconds: number;
+	turnCount: number;
+}
+
 export interface SidebarState {
 	workflow: string;
 	workflowState: string;
 	runId?: string;
 	tasks: SidebarTask[];
 	alignment?: SidebarAlignment;
+	taskOrchestrator?: SidebarTaskOrchestrator;
 	subagents?: SidebarSubagentRun[];
 }
 
@@ -79,6 +87,13 @@ const SUBAGENT_ICONS: Record<string, string> = {
 	"running": "●",
 	"done": "✓",
 	"error": "✗",
+};
+
+const TASK_ORCHESTRATOR_ICONS: Record<string, string> = {
+	"running": "●",
+	"waiting": "◌",
+	"error": "✗",
+	"closed": "✓",
 };
 
 function taskIcon(status: string): string {
@@ -130,6 +145,13 @@ export function renderSidebar(state: SidebarState): string[] {
 			const icons = cat.parts.map((p) => alignmentIcon(p.state)).join("");
 			lines.push(`  ${cat.name}: ${icons}`);
 		}
+	}
+
+	if (state.taskOrchestrator) {
+		lines.push("─ Task orchestrator");
+		lines.push(
+			`  ${TASK_ORCHESTRATOR_ICONS[state.taskOrchestrator.status] ?? "?"} ${state.taskOrchestrator.taskPreview} (${state.taskOrchestrator.elapsedSeconds}s · ${state.taskOrchestrator.turnCount} turn${state.taskOrchestrator.turnCount === 1 ? "" : "s"})`,
+		);
 	}
 
 	if (state.subagents && state.subagents.length > 0) {

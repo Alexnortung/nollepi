@@ -176,17 +176,25 @@ describe("renderSidebar", () => {
 		assert.ok(text.includes("Current step"), "current task steps shown");
 	});
 
-	it("renders active subagents section", () => {
+	it("renders task orchestrator and active subagents section", () => {
 		const state: SidebarState = {
 			workflow: "alignment",
 			workflowState: "task-execution",
 			tasks: [],
+			taskOrchestrator: {
+				status: "running",
+				taskPreview: "Active task",
+				elapsedSeconds: 7,
+				turnCount: 2,
+			},
 			subagents: [
 				{ id: 1, role: "investigator", status: "running", taskPreview: "Inspect repo", elapsedSeconds: 12 },
 				{ id: 2, role: "builder", status: "done", taskPreview: "Implement task", elapsedSeconds: 40 },
 			],
 		};
 		const text = renderSidebar(state).join("\n");
+		assert.ok(text.includes("Task orchestrator"));
+		assert.ok(text.includes("Active task"));
 		assert.ok(text.includes("Subagents"));
 		assert.ok(text.includes("investigator"));
 		assert.ok(text.includes("builder"));

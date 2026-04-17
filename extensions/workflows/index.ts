@@ -11,12 +11,15 @@ import { renderSidebar, type SidebarState } from "./sidebar/renderer.ts";
 import { AlignmentState } from "./state/alignment-state.ts";
 import { restoreState, serializeState, type WorkflowExtensionState } from "./state/persistence.ts";
 import { SubagentState } from "./state/subagent-state.ts";
+import { TaskOrchestratorState, type TaskOrchestratorResult } from "./state/task-orchestrator-state.ts";
 import { TaskState } from "./state/task-state.ts";
 import {
 	createWorkflowRuntime,
 	type WorkflowName,
 	type WorkflowRuntime,
 } from "./state/workflow-state.ts";
+import { buildTaskOrchestratorPacket } from "./task-orchestrator/packet-builder.ts";
+import { createTaskOrchestratorSessionFile, spawnTaskOrchestratorTurn } from "./task-orchestrator/spawner.ts";
 import { registerAlignmentManageTool } from "./tools/alignment-manage-tool.ts";
 import { registerDispatchSubagentTool } from "./tools/dispatch-subagent-tool.ts";
 import { registerWorkflowStateTool } from "./tools/workflow-info.ts";
@@ -37,14 +40,142 @@ export default function workflowExtension(pi: ExtensionAPI): void {
 	let taskState = new TaskState();
 	let alignmentState = new AlignmentState();
 	let subagentState = new SubagentState();
+	let taskOrchestratorState = new TaskOrchestratorState();
 	let latestUiContext: WorkflowContext | undefined;
 	const mtimeTracker = new MtimeTracker();
 
 	function persistState(): void {
 		pi.appendEntry(
 			CUSTOM_ENTRY_TYPE,
-			serializeState(runtime, mtimeTracker.toMap(), taskState, alignmentState, subagentState),
+			serializeState(runtime, mtimeTracker.toMap(), taskState, alignmentState, subagentState, taskOrchestratorState),
 		);
+	}
+
+	function usesTaskOrchestratorRouting(): boolean {
+		return runtime.activeWorkflow === "alignment" && (
+			runtime.workflowState === "task-alignment" ||
+			runtime.workflowState === "task-execution" ||
+			runtime.workflowState === "internal-review" ||
+			runtime.workflowState === "human-review"
+		);
+	}
+
+	function shouldRouteInputToTaskOrchestrator(text: string, source: string): boolean {
+		if (source === "extension") return false;
+		if (!usesTaskOrchestratorRouting()) return false;
+		if (!taskState.getActiveTaskContext().currentTask) return false;
+		if (text.trim().startsWith("/")) return false;
+		return true;
+	}
+
+	async function applyTaskOrchestratorHandoff(result: TaskOrchestratorResult): Promise<void> {
+		if (result.status !== "handoff" || !result.requestedTransition) return;
+		const active = taskState.getActiveTaskContext();
+		if (!active.currentTask) return;
+
+		if (result.outcomeSummary) {
+			taskState.recordTaskOutcome(active.currentTask.id, result.outcomeSummary);
+		}
+
+		if (result.requestedTransition === "task-execution") {
+			taskState.updateTask(active.currentTask.id, { status: "in-progress" });
+		}
+
+		if (runtime.activeWorkflow === "alignment" && runtime.workflowState === "human-review" && (result.requestedTransition === "next-task" || result.requestedTransition === "finish")) {
+			const commitResult = applyReviewCommit({
+				cwd: process.cwd(),
+				taskState,
+				taskId: active.currentTask.id,
+				commitIntent: result.commitIntent,
+				commitMessage: result.commitMessage,
+				commitHash: result.commitHash,
+			});
+			taskState.updateTask(active.currentTask.id, {
+				status: commitResult.skipped ? "approved-complete" : "committed",
+			});
+		}
+
+		runtime.transition(result.requestedTransition);
+		if (result.requestedTransition === "next-task" || result.requestedTransition === "finish") {
+			taskOrchestratorState.closeSession();
+		}
+		applyToolSet();
+		persistState();
+		await syncArtifacts();
+		persistState();
+		refreshUi();
+	}
+
+	function forwardToTaskOrchestrator(ctx: WorkflowContext, userMessage: string): void {
+		const active = taskState.getActiveTaskContext();
+		if (!active.currentTask) return;
+		const existing = taskOrchestratorState.getSession();
+		if (existing?.status === "running") {
+			if (ctx.hasUI) ctx.ui.notify("Task orchestrator is still running.", "warning");
+			return;
+		}
+
+		const session = taskOrchestratorState.startOrReuseSession({
+			taskId: active.currentTask.id,
+			taskPreview: active.currentTask.summary,
+			sessionFile: existing?.taskId === active.currentTask.id ? existing.sessionFile : createTaskOrchestratorSessionFile(active.currentTask.id),
+		});
+		taskOrchestratorState.startTurn();
+		persistState();
+		refreshUi();
+
+		const packet = buildTaskOrchestratorPacket({
+			runtime,
+			taskState,
+			alignmentState,
+			subagentState,
+		});
+
+		spawnTaskOrchestratorTurn(pi, ctx.cwd, session, packet, userMessage, {
+			onText: (delta) => {
+				taskOrchestratorState.appendText(delta);
+				persistState();
+				refreshUi();
+			},
+			onToolCall: () => {
+				taskOrchestratorState.recordToolCall();
+				persistState();
+				refreshUi();
+			},
+			onFinish: (result, displayText) => {
+				taskOrchestratorState.finishTurn(result, displayText);
+				persistState();
+				refreshUi();
+				pi.sendMessage({
+					customType: "workflow-task-orchestrator-message",
+					content: displayText || result.summary,
+					display: true,
+					details: {
+						taskId: active.currentTask?.id,
+						status: result.status,
+						requestedTransition: result.requestedTransition,
+					},
+				});
+				void applyTaskOrchestratorHandoff(result).catch((error: unknown) => {
+					const message = error instanceof Error ? error.message : String(error);
+					taskOrchestratorState.failTurn(message);
+					persistState();
+					refreshUi();
+					if (ctx.hasUI) ctx.ui.notify(`Task orchestrator handoff failed: ${message}`, "error");
+				});
+			},
+			onError: (message) => {
+				taskOrchestratorState.failTurn(message);
+				persistState();
+				refreshUi();
+				pi.sendMessage({
+					customType: "workflow-task-orchestrator-message",
+					content: `Task orchestrator error: ${message}`,
+					display: true,
+					details: { error: message, taskId: active.currentTask?.id },
+				});
+			},
+		});
 	}
 
 	function applyToolSet(): void {
@@ -122,6 +253,7 @@ export default function workflowExtension(pi: ExtensionAPI): void {
 	function buildSidebarState(): SidebarState {
 		const active = taskState.getActiveTaskContext();
 		const showAlignment = runtime.activeWorkflow === "alignment" || runtime.activeWorkflow === "autonomous";
+		const taskOrchestrator = taskOrchestratorState.getSession();
 		return {
 			workflow: runtime.activeWorkflow,
 			workflowState: runtime.workflowState,
@@ -146,6 +278,14 @@ export default function workflowExtension(pi: ExtensionAPI): void {
 							relevance: cat.relevance,
 							parts: cat.parts.map((p) => ({ id: p.id, summary: p.summary, state: p.state })),
 						})),
+					}
+				: undefined,
+			taskOrchestrator: taskOrchestrator
+				? {
+						status: taskOrchestrator.status,
+						taskPreview: taskOrchestrator.taskPreview,
+						elapsedSeconds: Math.max(0, Math.round(((taskOrchestrator.finishedAt ?? Date.now()) - taskOrchestrator.startedAt) / 1000)),
+						turnCount: taskOrchestrator.turnCount,
 					}
 				: undefined,
 			subagents: subagentState.runs.map((run) => ({
@@ -183,7 +323,7 @@ export default function workflowExtension(pi: ExtensionAPI): void {
 		refreshUi();
 	}
 
-	registerWorkflowStateTool(pi, () => runtime, () => taskState, () => alignmentState, () => subagentState);
+	registerWorkflowStateTool(pi, () => runtime, () => taskState, () => alignmentState, () => subagentState, () => taskOrchestratorState);
 	registerWorkflowSwitchTool(pi, () => runtime, handleSwitch);
 	registerTaskManageTool(pi, () => taskState, () => {
 		persistState();
@@ -238,7 +378,10 @@ export default function workflowExtension(pi: ExtensionAPI): void {
 				commitHash: event.commitHash,
 			});
 		},
-		(_event) => {
+		(event) => {
+			if (event.newState === "next-task" || event.newState === "finish") {
+				taskOrchestratorState.closeSession();
+			}
 			applyToolSet();
 			persistState();
 			void syncArtifacts().then(() => persistState());
@@ -344,6 +487,7 @@ export default function workflowExtension(pi: ExtensionAPI): void {
 		taskState = restored.taskState;
 		alignmentState = restored.alignmentState;
 		subagentState = restored.subagentState;
+		taskOrchestratorState = restored.taskOrchestratorState;
 		mtimeTracker.restoreFromMap(restored.artifactMtimes);
 		if (usesArtifactRuns() && !shouldCreateRunArtifacts(runtime.activeWorkflow, runtime.workflowState)) {
 			runtime.runId = undefined;
@@ -354,6 +498,14 @@ export default function workflowExtension(pi: ExtensionAPI): void {
 		applyToolSet();
 		updateStatus(ctx);
 		if (ctx.hasUI) ctx.ui.notify("Workflow extension loaded", "info");
+	});
+
+	pi.on("input", async (event, ctx) => {
+		if (!shouldRouteInputToTaskOrchestrator(event.text, event.source)) {
+			return { action: "continue" };
+		}
+		forwardToTaskOrchestrator(ctx, event.text);
+		return { action: "handled" };
 	});
 
 	pi.on("before_agent_start", async (event) => {
