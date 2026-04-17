@@ -71,7 +71,7 @@ After execution:
 - if the human made manual edits, the agent must not overwrite them unless the change is discussed and allowed
 - once the human accepts the task, the workflow can move directly to the next task or finish
 - if commit handling is still needed, it should be decided on the human-review exit itself
-- the human may override the proposed commit message, provide a replacement, or point at an existing commit instead of creating a duplicate
+- the human may override the proposed commit message, provide a replacement, or point at an existing commit hash so the agent records it instead of creating a duplicate
 
 ## Approval Surfaces
 

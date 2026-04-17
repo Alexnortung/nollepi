@@ -10,6 +10,7 @@ import {
 export function registerWorkflowTransitionTool(
 	pi: ExtensionAPI,
 	getRuntime: () => WorkflowRuntime,
+	onBeforeTransition: (event: WorkflowTransitionEvent) => void,
 	onTransition: (event: WorkflowTransitionEvent) => void,
 ): void {
 	pi.registerTool({
@@ -58,6 +59,21 @@ export function registerWorkflowTransitionTool(
 			}
 
 			const event = transition.event;
+
+			try {
+				onBeforeTransition(event);
+			} catch (error: unknown) {
+				const message = error instanceof Error ? error.message : String(error);
+				return {
+					content: [{ type: "text", text: `Transition failed: ${message}` }],
+					details: {
+						transitioned: false,
+						error: message,
+						currentState: runtime.workflowState,
+						validTransitions: runtime.getValidTransitions(),
+					},
+				};
+			}
 
 			try {
 				runtime.transition(params.state);
