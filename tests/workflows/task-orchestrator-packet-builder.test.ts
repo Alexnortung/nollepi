@@ -36,13 +36,26 @@ describe("buildTaskOrchestratorPacket", () => {
 			blockers: [],
 		}, "done");
 
+		const reviewerRun = subagents.startRun({ role: "reviewer", taskId: "02-current-task", goal: "Review", taskPreview: "Current task" });
+		subagents.finishRun(reviewerRun.id, {
+			role: "reviewer",
+			verdict: "pass",
+			issues: [],
+			verificationGaps: [],
+			suggestedNextAction: "Move on",
+		}, "done");
+		const activeInvestigator = subagents.startRun({ role: "investigator", taskId: "02-current-task", goal: "Inspect", taskPreview: "Current task" });
+
 		const packet = buildTaskOrchestratorPacket({ runtime, taskState, alignmentState: alignment, subagentState: subagents });
 		assert.equal(packet.task.id, "02-current-task");
 		assert.ok(packet.alignedContext.objective.includes("Do thing"));
 		assert.ok(packet.alignedContext.constraints.includes("Stay focused"));
 		assert.equal(packet.priorTaskSummaries.length, 1);
 		assert.deepEqual(packet.priorTaskSummaries[0].changedFiles, ["src/old.ts"]);
-		assert.equal(packet.latestBuilderResult?.summary, "Implemented current task");
-		assert.deepEqual(packet.latestBuilderResult?.changedFiles, ["src/current.ts"]);
+		assert.equal(packet.specialistContext.latestBuilderResult?.summary, "Implemented current task");
+		assert.deepEqual(packet.specialistContext.latestBuilderResult?.changedFiles, ["src/current.ts"]);
+		assert.equal(packet.specialistContext.latestReviewerResult?.verdict, "pass");
+		assert.equal(packet.specialistContext.activeRuns.length, 1);
+		assert.equal(packet.specialistContext.activeRuns[0].id, activeInvestigator.id);
 	});
 });

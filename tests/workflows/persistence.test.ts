@@ -59,11 +59,15 @@ describe("persistence", () => {
 		const taskOrchestratorState = new TaskOrchestratorState();
 		taskOrchestratorState.startOrReuseSession({ taskId: "01-task", taskPreview: "Task", sessionFile: "/tmp/task.jsonl" });
 		taskOrchestratorState.startTurn();
+		taskOrchestratorState.enqueueFollowUpMessage("queued specialist result");
+		taskOrchestratorState.requestCloseAfterDrain();
 
 		const serialized = serializeState(runtime, mtimes, undefined, undefined, undefined, taskOrchestratorState);
 		const restored = restoreState(serialized);
 		assert.equal(restored.taskOrchestratorState.getSession()?.taskId, "01-task");
 		assert.equal(restored.taskOrchestratorState.getSession()?.status, "waiting");
+		assert.deepEqual(restored.taskOrchestratorState.getSession()?.queuedFollowUpMessages, ["queued specialist result"]);
+		assert.equal(restored.taskOrchestratorState.getSession()?.pendingCloseAfterDrain, true);
 	});
 
 	it("restoreState returns defaults for undefined input", () => {

@@ -27,6 +27,19 @@ describe("parseTaskOrchestratorResult", () => {
 		assert.equal(parsed.result.requestedTransition, "task-execution");
 	});
 
+	it("parses dispatch requests", () => {
+		const text = [
+			"I am dispatching an investigator.",
+			"",
+			"TASK_ORCHESTRATOR_JSON:",
+			'{"status":"continue","summary":"Dispatching investigator.","dispatchRequests":[{"role":"investigator","goal":"Inspect files","successTarget":"Return files"},{"role":"builder","goal":"Implement change","successTarget":"Write code","doneCriteria":["tests pass"]}]}',
+		].join("\n");
+		const parsed = parseTaskOrchestratorResult(text);
+		assert.equal(parsed.result.dispatchRequests?.length, 2);
+		assert.equal(parsed.result.dispatchRequests?.[0].role, "investigator");
+		assert.equal(parsed.result.dispatchRequests?.[1].role, "builder");
+	});
+
 	it("throws when payload is missing", () => {
 		assert.throws(() => parseTaskOrchestratorResult("plain text only"), /TASK_ORCHESTRATOR_JSON/);
 	});

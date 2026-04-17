@@ -50,11 +50,27 @@ function extractPayload(text: string): { payload: string; displayText: string } 
 	return { payload, displayText };
 }
 
+function isValidDispatchRequest(value: unknown): boolean {
+	if (!value || typeof value !== "object") return false;
+	const record = value as Record<string, unknown>;
+	if (record.role !== "investigator" && record.role !== "builder" && record.role !== "reviewer") return false;
+	if (typeof record.goal !== "string" || typeof record.successTarget !== "string") return false;
+	if (record.role === "builder" && (!Array.isArray(record.doneCriteria) || !record.doneCriteria.every((item) => typeof item === "string"))) {
+		return false;
+	}
+	return true;
+}
+
 function isValidResult(value: unknown): value is TaskOrchestratorResult {
 	if (!value || typeof value !== "object") return false;
 	const record = value as Record<string, unknown>;
 	if (record.status !== "continue" && record.status !== "handoff") return false;
-	return typeof record.summary === "string";
+	if (typeof record.summary !== "string") return false;
+	if (record.dispatchRequests !== undefined) {
+		if (!Array.isArray(record.dispatchRequests)) return false;
+		if (!record.dispatchRequests.every(isValidDispatchRequest)) return false;
+	}
+	return true;
 }
 
 export function parseTaskOrchestratorResult(text: string): { result: TaskOrchestratorResult; displayText: string } {

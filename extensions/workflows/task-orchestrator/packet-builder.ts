@@ -26,11 +26,22 @@ export interface TaskOrchestratorPacket {
 		relevantSymbols: string[];
 		notes: string[];
 	}>;
-	latestBuilderResult?: {
-		summary: string;
-		changedFiles: string[];
-		commits: string[];
-		verification: string[];
+	specialistContext: {
+		activeRuns: Array<{ id: number; role: string; status: string; goal: string }>;
+		investigatorFindings: string[];
+		latestBuilderResult?: {
+			summary: string;
+			changedFiles: string[];
+			commits: string[];
+			verification: string[];
+			blockers: string[];
+		};
+		latestReviewerResult?: {
+			verdict: string;
+			issues: unknown[];
+			verificationGaps: string[];
+			suggestedNextAction: string;
+		};
 	};
 }
 
@@ -53,6 +64,10 @@ export function buildTaskOrchestratorPacket(ctx: BuildTaskOrchestratorPacketCont
 	if (!active.currentTask) throw new Error("Task orchestrator requires an active task.");
 
 	const latestBuilder = ctx.subagentState.getLatestBuilderResult(active.currentTask.id);
+	const latestReviewer = [...ctx.subagentState.runs]
+		.reverse()
+		.find((run) => run.role === "reviewer" && run.status === "done" && run.taskId === active.currentTask.id)?.result;
+	const activeRuns = ctx.subagentState.getActiveRuns().filter((run) => run.taskId === active.currentTask.id);
 
 	return {
 		workflow: ctx.runtime.activeWorkflow,
@@ -77,13 +92,26 @@ export function buildTaskOrchestratorPacket(ctx: BuildTaskOrchestratorPacketCont
 			relevantSymbols: summary.relevantSymbols,
 			notes: summary.notes,
 		})),
-		latestBuilderResult: latestBuilder?.role === "builder"
-			? {
-				summary: latestBuilder.summary,
-				changedFiles: latestBuilder.changedFiles,
-				commits: latestBuilder.commits,
-				verification: latestBuilder.verification,
-			}
-			: undefined,
+		specialistContext: {
+			activeRuns: activeRuns.map((run) => ({ id: run.id, role: run.role, status: run.status, goal: run.goal })),
+			investigatorFindings: ctx.subagentState.getInvestigatorFindings(active.currentTask.id),
+			latestBuilderResult: latestBuilder?.role === "builder"
+				? {
+					summary: latestBuilder.summary,
+					changedFiles: latestBuilder.changedFiles,
+					commits: latestBuilder.commits,
+					verification: latestBuilder.verification,
+					blockers: latestBuilder.blockers,
+				}
+				: undefined,
+			latestReviewerResult: latestReviewer?.role === "reviewer"
+				? {
+					verdict: latestReviewer.verdict,
+					issues: latestReviewer.issues,
+					verificationGaps: latestReviewer.verificationGaps,
+					suggestedNextAction: latestReviewer.suggestedNextAction,
+				}
+				: undefined,
+		},
 	};
 }

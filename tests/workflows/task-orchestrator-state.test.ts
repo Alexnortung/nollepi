@@ -37,6 +37,54 @@ describe("TaskOrchestratorState", () => {
 		assert.equal(state.getSession()?.status, "waiting");
 	});
 
+	it("queues specialist follow-up messages while the task orchestrator is running", () => {
+		const state = new TaskOrchestratorState();
+		state.startOrReuseSession({ taskId: "01-task", taskPreview: "Task", sessionFile: "/tmp/task.jsonl" });
+		state.startTurn();
+		state.enqueueFollowUpMessage("specialist result one");
+		state.enqueueFollowUpMessage("specialist result two");
+
+		assert.deepEqual(state.getSession()?.queuedFollowUpMessages, ["specialist result one", "specialist result two"]);
+		assert.equal(state.dequeueFollowUpMessage(), "specialist result one");
+		assert.equal(state.dequeueFollowUpMessage(), "specialist result two");
+		assert.equal(state.dequeueFollowUpMessage(), undefined);
+	});
+
+	it("stays open until drained after close is requested", () => {
+		const state = new TaskOrchestratorState();
+		state.startOrReuseSession({ taskId: "01-task", taskPreview: "Task", sessionFile: "/tmp/task.jsonl" });
+		state.requestCloseAfterDrain();
+		state.enqueueFollowUpMessage("late specialist result");
+
+		assert.equal(state.closeIfDrained(0), false);
+		assert.equal(state.getSession()?.status, "waiting");
+
+		state.dequeueFollowUpMessage();
+		assert.equal(state.closeIfDrained(1), false);
+		assert.equal(state.getSession()?.status, "waiting");
+
+		assert.equal(state.closeIfDrained(0), true);
+		assert.equal(state.getSession()?.status, "closed");
+	});
+
+	it("restores queued follow-up messages", () => {
+		const state = TaskOrchestratorState.restore({
+			session: {
+				taskId: "01-task",
+				taskPreview: "Task",
+				sessionFile: "/tmp/task.jsonl",
+				status: "waiting",
+				startedAt: 1,
+				turnCount: 1,
+				toolCalls: 0,
+				outputText: "",
+				queuedFollowUpMessages: ["queued result"],
+			},
+		});
+
+		assert.equal(state.dequeueFollowUpMessage(), "queued result");
+	});
+
 	it("closes and replaces a session when task changes", () => {
 		const state = new TaskOrchestratorState();
 		state.startOrReuseSession({ taskId: "01-task", taskPreview: "Task 1", sessionFile: "/tmp/one.jsonl" });
