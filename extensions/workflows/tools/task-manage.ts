@@ -1,11 +1,12 @@
-import { TaskState, type TaskStatus } from "../state/task-state.ts";
+import { TaskState, type TaskOutcomeSummary, type TaskStatus } from "../state/task-state.ts";
 
 export type TaskAction =
 	| { action: "create"; summary: string; description: string; alignmentNeeded?: boolean }
 	| { action: "update"; taskId: string; summary?: string; description?: string; status?: TaskStatus; alignmentNeeded?: boolean }
 	| { action: "split"; taskId: string; replacements: Array<{ summary: string; description: string; alignmentNeeded: boolean }> }
 	| { action: "merge"; taskIds: string[]; summary: string; description: string; alignmentNeeded?: boolean }
-	| { action: "select"; taskId: string };
+	| { action: "select"; taskId: string }
+	| { action: "record_outcome"; taskId: string; changedFiles: string[]; relevantSymbols: string[]; notes: string[] };
 
 export function applyTaskAction(state: TaskState, input: TaskAction): TaskState {
 	switch (input.action) {
@@ -37,5 +38,14 @@ export function applyTaskAction(state: TaskState, input: TaskAction): TaskState 
 		case "select":
 			state.selectCurrentTask(input.taskId);
 			return state;
+		case "record_outcome": {
+			const summary: TaskOutcomeSummary = {
+				changedFiles: input.changedFiles,
+				relevantSymbols: input.relevantSymbols,
+				notes: input.notes,
+			};
+			state.recordTaskOutcome(input.taskId, summary);
+			return state;
+		}
 	}
 }

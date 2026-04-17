@@ -34,7 +34,7 @@ describe("buildWorkflowPrompt", () => {
 		assert.doesNotMatch(prompt, /approved → commit/i);
 	});
 
-	it("alignment human review guidance includes commit-aware direct exits", () => {
+	it("alignment human-review guidance instructs recording outcome before transitioning", () => {
 		const runtime = createWorkflowRuntime({
 			activeWorkflow: "alignment",
 			workflowState: "human-review",
@@ -45,6 +45,21 @@ describe("buildWorkflowPrompt", () => {
 		assert.match(prompt, /transition directly to next-task or finish/i);
 		assert.match(prompt, /existing commit hash/i);
 		assert.match(prompt, /duplicate commit/i);
+		assert.match(prompt, /record_outcome/i);
+		assert.match(prompt, /changedFiles/i);
+	});
+
+	it("alignment next-task guidance presents outcome and waits for human direction", () => {
+		const runtime = createWorkflowRuntime({
+			activeWorkflow: "alignment",
+			workflowState: "next-task",
+			runId: undefined,
+		});
+		const prompt = buildWorkflowPrompt(runtime);
+		assert.match(prompt, /high-level orchestrator/i);
+		assert.match(prompt, /remaining approved task list/i);
+		assert.match(prompt, /human leads/i);
+		assert.doesNotMatch(prompt, /record_outcome/i);
 	});
 
 	it("returns autonomous instructions for autonomous workflow", () => {

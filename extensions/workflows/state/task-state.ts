@@ -1,3 +1,9 @@
+export interface TaskOutcomeSummary {
+	changedFiles: string[];
+	relevantSymbols: string[];
+	notes: string[];
+}
+
 export type TaskStatus =
 	| "proposed"
 	| "approved"
@@ -25,6 +31,7 @@ export interface WorkflowTask {
 	steps: WorkflowStep[];
 	commitHashes: string[];
 	alignmentNeeded: boolean;
+	outcomeSummary?: TaskOutcomeSummary;
 	taskDir: string;
 	taskMdPath: string;
 }
@@ -214,6 +221,19 @@ export class TaskState implements TaskRuntimeState {
 
 	completeStep(taskId: string, stepId: string): void {
 		this.updateStep(taskId, stepId, { status: "done" });
+	}
+
+	recordTaskOutcome(taskId: string, summary: TaskOutcomeSummary): void {
+		this.tasks = this.tasks.map((task) => {
+			if (task.id !== taskId) return task;
+			return { ...task, outcomeSummary: summary };
+		});
+	}
+
+	getCompletedOutcomeSummaries(): Array<{ taskId: string; summary: TaskOutcomeSummary }> {
+		return this.tasks
+			.filter((task) => task.outcomeSummary !== undefined)
+			.map((task) => ({ taskId: task.id, summary: task.outcomeSummary! }));
 	}
 
 	recordTaskCommit(taskId: string, hash: string): void {

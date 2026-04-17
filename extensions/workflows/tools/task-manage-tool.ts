@@ -4,7 +4,7 @@ import { TaskState } from "../state/task-state.ts";
 import { applyTaskAction, type TaskAction } from "./task-manage.ts";
 
 export const taskManageSchema = Type.Object({
-	action: Type.String({ description: "One of: create, update, split, merge, select" }),
+	action: Type.String({ description: "One of: create, update, split, merge, select, record_outcome" }),
 	taskId: Type.Optional(Type.String()),
 	taskIds: Type.Optional(Type.Array(Type.String())),
 	summary: Type.Optional(Type.String()),
@@ -20,6 +20,9 @@ export const taskManageSchema = Type.Object({
 			}),
 		),
 	),
+	changedFiles: Type.Optional(Type.Array(Type.String(), { description: "Files changed by this task (for record_outcome)" })),
+	relevantSymbols: Type.Optional(Type.Array(Type.String(), { description: "New/modified functions, classes, types introduced (for record_outcome)" })),
+	notes: Type.Optional(Type.Array(Type.String(), { description: "Other useful context for the human or later tasks (for record_outcome)" })),
 });
 
 export function registerTaskManageTool(
@@ -30,8 +33,8 @@ export function registerTaskManageTool(
 	pi.registerTool({
 		name: "task_manage",
 		label: "Task Manage",
-		description: "Create, update, split, merge, or select workflow tasks.",
-		promptSnippet: "Manage workflow tasks and current task selection",
+		description: "Create, update, split, merge, select workflow tasks, or record a task outcome summary.",
+		promptSnippet: "Manage workflow tasks and current task selection. Use record_outcome after task completion to record changedFiles, relevantSymbols, and notes for the high-level orchestrator.",
 		parameters: taskManageSchema,
 		async execute(_toolCallId, params) {
 			const state = getTaskState();

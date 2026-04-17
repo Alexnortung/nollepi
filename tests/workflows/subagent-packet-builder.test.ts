@@ -120,4 +120,38 @@ describe("buildDispatchPacket", () => {
 		assert.deepEqual(packet.changedFiles, ["extensions/workflows/subagents/spawner.ts"]);
 		assert.deepEqual(packet.commits, ["abc1234"]);
 	});
+
+	it("includes prior task outcome summaries in priorFindings", () => {
+		const { runtime, taskState, alignment, subagents } = makeBaseFixture();
+
+		taskState.addTask({ summary: "Prior task", description: "Something done before", alignmentNeeded: false });
+		taskState.recordTaskOutcome("02-prior-task", {
+			changedFiles: ["extensions/workflows/state/task-state.ts"],
+			relevantSymbols: ["TaskState.recordTaskCommit"],
+			notes: ["task-state now tracks commit hashes per task"],
+		});
+
+		const packet = buildDispatchPacket(
+			{ runtime, taskState, alignmentState: alignment, subagentState: subagents },
+			{ role: "investigator", goal: "Check state", successTarget: "Return findings" },
+		);
+
+		const findings = packet.priorFindings.join("\n");
+		assert.ok(findings.includes("02-prior-task"), "should include prior task id");
+		assert.ok(findings.includes("extensions/workflows/state/task-state.ts"), "should include changed file");
+		assert.ok(findings.includes("TaskState.recordTaskCommit"), "should include relevant symbol");
+		assert.ok(findings.includes("task-state now tracks commit hashes per task"), "should include note");
+	});
+
+	it("packet with no completed outcomes has investigator findings but no task summary lines", () => {
+		const { runtime, taskState, alignment, subagents } = makeBaseFixture();
+
+		const packet = buildDispatchPacket(
+			{ runtime, taskState, alignmentState: alignment, subagentState: subagents },
+			{ role: "investigator", goal: "Check state", successTarget: "Return findings" },
+		);
+
+		assert.ok(packet.priorFindings.includes("Use a widget for running state"), "investigator finding still present");
+		assert.ok(!packet.priorFindings.some((f) => f.startsWith("Task ")), "no task outcome lines without recorded outcomes");
+	});
 });
