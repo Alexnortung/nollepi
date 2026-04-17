@@ -15,4 +15,4 @@ These documents capture the current product vision and behavioral rules before i
 - `task-lifecycle.md` — task, step, review, commit, and completion model for both workflows
 - `artifacts.md` — live workflow/task/step markdown artifacts
 - `sidebar.md` — sidebar purpose and behavior
-- `orchestrator.md` — orchestrator and subagent model
+- `orchestrator.md` — high-level orchestrator, task orchestrator, and specialist subagent model

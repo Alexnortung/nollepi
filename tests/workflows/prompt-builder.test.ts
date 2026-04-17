@@ -29,6 +29,8 @@ describe("buildWorkflowPrompt", () => {
 		assert.match(prompt, /do not use superpowers/i);
 		assert.match(prompt, /begin with a brief overview of your current mental model/i);
 		assert.match(prompt, /human review → next task \/ finish/i);
+		assert.match(prompt, /high-level orchestrator/i);
+		assert.match(prompt, /task orchestrator/i);
 		assert.doesNotMatch(prompt, /approved → commit/i);
 	});
 
