@@ -38,6 +38,27 @@ describe("buildSubagentUserPrompt", () => {
 		assert.match(prompt, /Do not wrap the JSON in markdown fences/i);
 		assert.match(prompt, /Do not add any text after the RESULT_JSON payload/i);
 	});
+
+	it("shows a concrete reviewer RESULT_JSON example", () => {
+		const reviewerPacket: ReviewerPacket = {
+			...packet,
+			role: "reviewer",
+			alignedContext: {
+				objective: [],
+				scope: [],
+				constraints: [],
+				approach: [],
+			},
+			changedFiles: [],
+			commits: [],
+			verification: [],
+		};
+		const prompt = buildSubagentUserPrompt(reviewerPacket);
+		assert.match(
+			prompt,
+			/RESULT_JSON:\n\{"role":"reviewer","verdict":"pass","issues":\[\],"verificationGaps":\[\],"suggestedNextAction":"Ship it"\}/,
+		);
+	});
 });
 
 describe("buildSubagentSystemPrompt", () => {
@@ -66,5 +87,26 @@ describe("buildSubagentSystemPrompt", () => {
 		assert.match(prompt, /RESULT_JSON:/);
 		assert.match(prompt, /Do not wrap the JSON in markdown fences/i);
 		assert.match(prompt, /Do not add any text after the RESULT_JSON payload/i);
+	});
+
+	it("shows a concrete reviewer RESULT_JSON example", () => {
+		const reviewerPacket: ReviewerPacket = {
+			...packet,
+			role: "reviewer",
+			alignedContext: {
+				objective: [],
+				scope: [],
+				constraints: [],
+				approach: [],
+			},
+			changedFiles: [],
+			commits: [],
+			verification: [],
+		};
+		const prompt = buildSubagentSystemPrompt(reviewerPacket);
+		assert.match(
+			prompt,
+			/RESULT_JSON:\n\{"role":"reviewer","verdict":"pass","issues":\[\],"verificationGaps":\[\],"suggestedNextAction":"Ship it"\}/,
+		);
 	});
 });
