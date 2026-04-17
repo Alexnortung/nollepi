@@ -120,7 +120,7 @@ Completed tasks should record commit hash(es) in both:
 
 This allows one task to point to multiple commits when the human or agent creates more than one commit for that task.
 
-In `alignment`, commit handling is settled as part of completing `human review` rather than by entering separate workflow states for approval and commit. The human may accept the proposed commit message, replace it, or point at an existing commit so the agent does not create a duplicate.
+In `alignment`, commit handling is settled as part of completing `human review` rather than by entering separate workflow states for approval and commit. The human may accept the proposed commit message, replace it, or provide an existing commit hash so the agent records it instead of creating a duplicate.
 
 ## Workflow Completion
 

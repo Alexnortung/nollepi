@@ -26,6 +26,7 @@ import { registerTaskManageTool } from "./tools/task-manage-tool.ts";
 import { getToolsForWorkflow } from "./tools/tool-sets.ts";
 import { registerWorkflowSwitchTool } from "./tools/workflow-switch.ts";
 import { registerWorkflowTransitionTool } from "./tools/workflow-transition.ts";
+import { applyReviewCommit } from "./tools/review-commit.ts";
 
 const CUSTOM_ENTRY_TYPE = "workflow-state";
 
@@ -213,12 +214,37 @@ export default function workflowExtension(pi: ExtensionAPI): void {
 		requestUiRefresh: refreshUi,
 		isIdle: () => latestUiContext?.isIdle() ?? false,
 	});
-	registerWorkflowTransitionTool(pi, () => runtime, (_event) => {
-		applyToolSet();
-		persistState();
-		void syncArtifacts().then(() => persistState());
-		refreshUi();
-	});
+	registerWorkflowTransitionTool(
+		pi,
+		() => runtime,
+		(event) => {
+			if (
+				runtime.activeWorkflow !== "alignment" ||
+				runtime.workflowState !== "human-review" ||
+				(event.newState !== "next-task" && event.newState !== "finish")
+			) {
+				return;
+			}
+
+			const active = taskState.getActiveTaskContext();
+			if (!active.currentTask) return;
+
+			applyReviewCommit({
+				cwd: process.cwd(),
+				taskState,
+				taskId: active.currentTask.id,
+				commitIntent: event.commitIntent,
+				commitMessage: event.commitMessage,
+				commitHash: event.commitHash,
+			});
+		},
+		(_event) => {
+			applyToolSet();
+			persistState();
+			void syncArtifacts().then(() => persistState());
+			refreshUi();
+		},
+	);
 
 	pi.registerCommand("workflow", {
 		description: "Show or change workflow: /workflow [base|superpowers|alignment|autonomous]",

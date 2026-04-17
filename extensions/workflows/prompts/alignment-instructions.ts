@@ -21,7 +21,7 @@ function getAlignmentStateGuidance(state: string): string {
 		case "internal-review":
 			return "Review the task work before presenting to the human. Dispatch a reviewer after implementation exists to check against the task description and aligned constraints.";
 		case "human-review":
-			return "Present results, including a proposed commit message. Take human feedback seriously. Protect human manual edits. If review completes successfully, transition directly to next-task or finish, carrying commit intent, commit message, or existing commit hash data on workflow_transition when relevant.";
+			return "Present results, including a proposed commit message. Take human feedback seriously. Protect human manual edits. If the human already committed, supply the existing commit hash so the transition can record it instead of creating a duplicate commit. If review completes successfully, transition directly to next-task or finish, carrying commit intent, commit message, or existing commit hash data on workflow_transition when relevant.";
 		case "next-task":
 			return "Move to the next task in the approved list.";
 		case "finish":
@@ -56,7 +56,7 @@ ${getAlignmentStateGuidance(runtime.workflowState)}
 ### Tools Available
 - workflow_state — inspect current workflow state
 - workflow_switch — switch workflows (only in idle/finish state)
-- workflow_transition — use direct human-review exits to next-task/finish, and include commitIntent / commitMessage / commitHash when review completion also settles commit handling.
+- workflow_transition — use direct human-review exits to next-task/finish, and include commitIntent / commitMessage / commitHash when review completion also settles commit handling. If the human already committed, provide the existing commit hash so the agent records it instead of making a duplicate commit.
 - Use alignment_manage, task_manage, step_manage, task_commit, and dispatch_subagent tools when they become available.
 
 ### Artifacts
