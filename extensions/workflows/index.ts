@@ -213,7 +213,7 @@ export default function workflowExtension(pi: ExtensionAPI): void {
 		requestUiRefresh: refreshUi,
 		isIdle: () => latestUiContext?.isIdle() ?? false,
 	});
-	registerWorkflowTransitionTool(pi, () => runtime, () => {
+	registerWorkflowTransitionTool(pi, () => runtime, (_event) => {
 		applyToolSet();
 		persistState();
 		void syncArtifacts().then(() => persistState());

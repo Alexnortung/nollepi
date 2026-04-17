@@ -36,8 +36,6 @@ describe("WorkflowRuntime", () => {
 		rt.transition("task-execution");
 		rt.transition("internal-review");
 		rt.transition("human-review");
-		rt.transition("approved");
-		rt.transition("commit");
 		rt.transition("finish");
 		assert.equal(rt.canSwitch(), true);
 	});
@@ -118,8 +116,6 @@ describe("WorkflowRuntime", () => {
 		rt.transition("task-execution");
 		rt.transition("internal-review");
 		rt.transition("human-review");
-		rt.transition("approved");
-		rt.transition("commit");
 		rt.transition("finish");
 		rt.switchTo("autonomous");
 		assert.equal(rt.runId, undefined);
@@ -129,6 +125,30 @@ describe("WorkflowRuntime", () => {
 		const rt = createWorkflowRuntime();
 		const states = rt.getValidStates();
 		assert.ok(states.includes("idle"));
+	});
+
+	it("alignment no longer exposes approved or commit states", () => {
+		const rt = createWorkflowRuntime();
+		rt.switchTo("alignment");
+		const states = rt.getValidStates();
+		assert.ok(!states.includes("approved"));
+		assert.ok(!states.includes("commit"));
+		assert.throws(() => rt.transition("approved"), /Invalid state/);
+		assert.throws(() => rt.transition("commit"), /Invalid state/);
+	});
+
+	it("human review can transition directly to next-task or finish", () => {
+		const rt = createWorkflowRuntime();
+		rt.switchTo("alignment");
+		rt.transition("intake");
+		rt.transition("high-level-alignment");
+		rt.transition("task-proposal");
+		rt.transition("task-list-alignment");
+		rt.transition("task-list-approval");
+		rt.transition("task-execution");
+		rt.transition("internal-review");
+		rt.transition("human-review");
+		assert.deepEqual(rt.getValidTransitions(), ["task-execution", "next-task", "finish"]);
 	});
 
 	it("getValidTransitions returns reachable states from current state", () => {

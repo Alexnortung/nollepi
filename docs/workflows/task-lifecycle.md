@@ -80,9 +80,7 @@ A typical task lifecycle in `alignment` is:
 5. task execution
 6. internal review
 7. human review
-8. task approval
-9. commit
-10. next task
+8. next task or finish
 
 ## Autonomous Workflow Lifecycle
 
@@ -100,7 +98,7 @@ A typical task lifecycle in `autonomous` is:
 
 In `alignment`:
 
-- the human reviews completed task work before final approval
+- the human reviews completed task work before the workflow advances beyond the task
 - the agent must take human review feedback seriously
 - if the human made manual edits, the agent must not change them unless the change is discussed and allowed
 - the agent may question a human edit, but if the human insists, it must be preserved
@@ -121,6 +119,8 @@ Completed tasks should record commit hash(es) in both:
 - `task.md`
 
 This allows one task to point to multiple commits when the human or agent creates more than one commit for that task.
+
+In `alignment`, commit handling is settled as part of completing `human review` rather than by entering separate workflow states for approval and commit. The human may accept the proposed commit message, replace it, or point at an existing commit so the agent does not create a duplicate.
 
 ## Workflow Completion
 
