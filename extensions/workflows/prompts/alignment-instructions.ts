@@ -21,11 +21,7 @@ function getAlignmentStateGuidance(state: string): string {
 		case "internal-review":
 			return "Review the task work before presenting to the human. Dispatch a reviewer after implementation exists to check against the task description and aligned constraints.";
 		case "human-review":
-			return "Present results. Take human feedback seriously. Protect human manual edits.";
-		case "approved":
-			return "Task approved by human. Ready to commit.";
-		case "commit":
-			return "Commit the approved task. Record commit hash in workflow and task artifacts.";
+			return "Present results, including a proposed commit message. Take human feedback seriously. Protect human manual edits. If review completes successfully, transition directly to next-task or finish, carrying commit intent, commit message, or existing commit hash data on workflow_transition when relevant.";
 		case "next-task":
 			return "Move to the next task in the approved list.";
 		case "finish":
@@ -52,7 +48,7 @@ Do not use Superpowers skills or Superpowers workflow behavior while alignment w
 - Human manual edits are protected by default. You may question them, but if the human insists, you must not change them.
 
 ### Workflow Flow
-intake → high-level alignment → task proposal → task-list alignment → task-list approval → task alignment → task execution → internal review → human review → approved → commit → next task → finish
+intake → high-level alignment → task proposal → task-list alignment → task-list approval → task alignment → task execution → internal review → human review → next task / finish
 
 ### Current State: ${runtime.workflowState}
 ${getAlignmentStateGuidance(runtime.workflowState)}
@@ -60,6 +56,7 @@ ${getAlignmentStateGuidance(runtime.workflowState)}
 ### Tools Available
 - workflow_state — inspect current workflow state
 - workflow_switch — switch workflows (only in idle/finish state)
+- workflow_transition — use direct human-review exits to next-task/finish, and include commitIntent / commitMessage / commitHash when review completion also settles commit handling.
 - Use alignment_manage, task_manage, step_manage, task_commit, and dispatch_subagent tools when they become available.
 
 ### Artifacts

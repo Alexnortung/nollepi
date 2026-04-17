@@ -28,6 +28,19 @@ describe("buildWorkflowPrompt", () => {
 		assert.ok(prompt.includes("intake"));
 		assert.match(prompt, /do not use superpowers/i);
 		assert.match(prompt, /begin with a brief overview of your current mental model/i);
+		assert.match(prompt, /human review → next task \/ finish/i);
+		assert.doesNotMatch(prompt, /approved → commit/i);
+	});
+
+	it("alignment human review guidance includes commit-aware direct exits", () => {
+		const runtime = createWorkflowRuntime({
+			activeWorkflow: "alignment",
+			workflowState: "human-review",
+			runId: undefined,
+		});
+		const prompt = buildWorkflowPrompt(runtime);
+		assert.match(prompt, /including a proposed commit message/i);
+		assert.match(prompt, /transition directly to next-task or finish/i);
 	});
 
 	it("returns autonomous instructions for autonomous workflow", () => {

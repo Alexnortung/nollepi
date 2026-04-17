@@ -44,8 +44,6 @@ describe("workflow system integration", () => {
 		restored.transition("task-execution");
 		restored.transition("internal-review");
 		restored.transition("human-review");
-		restored.transition("approved");
-		restored.transition("commit");
 		restored.transition("finish");
 		assert.equal(restored.canSwitch(), true);
 

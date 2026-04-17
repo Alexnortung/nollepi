@@ -13,7 +13,7 @@ This is the highest-human-involvement workflow.
 - already aligned parts should not be repeated unnecessarily
 - each aligned part requires explicit human confirmation
 - the human may say "just go" for a task when additional task-level alignment is not needed
-- the human reviews task outcomes before approval and commit
+- the human reviews task outcomes before the workflow advances, and that review may also settle commit handling
 - human manual edits are protected by default
 - the agent may question a human edit, but if the human insists, the agent must not modify it
 
@@ -28,10 +28,7 @@ This is the highest-human-involvement workflow.
 7. task execution
 8. internal review
 9. human review
-10. task approval
-11. commit
-12. next task
-13. wrap-up / finish
+10. next task or wrap-up / finish
 
 This workflow is done only when it reaches an explicit wrap-up / finish state.
 
@@ -72,7 +69,9 @@ After execution:
 - the human reviews the code
 - the orchestrator takes the human’s review seriously and addresses requested changes
 - if the human made manual edits, the agent must not overwrite them unless the change is discussed and allowed
-- once the human approves the task, the task can be committed if not already committed
+- once the human accepts the task, the workflow can move directly to the next task or finish
+- if commit handling is still needed, it should be decided on the human-review exit itself
+- the human may override the proposed commit message, provide a replacement, or point at an existing commit instead of creating a duplicate
 
 ## Approval Surfaces
 
@@ -85,7 +84,7 @@ The workflow has three explicit approval surfaces:
    - the task list is accepted as the approved execution plan
 
 3. **task-completion approval**
-   - the result of a task is accepted and may move toward commit/completion
+   - the result of a task is accepted and may move directly to next-task or finish, optionally carrying commit intent or existing commit data
 
 ## State Machine
 
@@ -102,12 +101,10 @@ Expected states include concepts like:
 - task execution
 - internal review
 - human review
-- approved
-- commit
 - next task
 - wrap-up / finish
 
-The exact final state names can be refined during design and implementation.
+A successful `human-review` exit should land directly in `next-task` or `finish`. If commit handling is part of that exit, the transition surface should carry whether the agent should create a commit, what message to use, or which existing commit hash already satisfies the task so the system avoids duplicate commits.
 
 ## Sidebar
 
