@@ -1,6 +1,6 @@
 import type { AlignmentCategory, AlignmentState } from "../state/alignment-state.ts";
 import type { SubagentState } from "../state/subagent-state.ts";
-import type { TaskState } from "../state/task-state.ts";
+import type { TaskState, TaskOutcomeSummary } from "../state/task-state.ts";
 import type { WorkflowRuntime } from "../state/workflow-state.ts";
 import type {
 	BuilderPacket,
@@ -35,6 +35,16 @@ function unresolvedSummaries(categories: AlignmentCategory[], categoryName: stri
 		.map((part) => part.summary) ?? [];
 }
 
+function formatOutcomeSummaries(summaries: Array<{ taskId: string; summary: TaskOutcomeSummary }>): string[] {
+	return summaries.map(({ taskId, summary }) => {
+		const parts: string[] = [`Task ${taskId}:`];
+		if (summary.changedFiles.length > 0) parts.push(`  changed: ${summary.changedFiles.join(", ")}`);
+		if (summary.relevantSymbols.length > 0) parts.push(`  symbols: ${summary.relevantSymbols.join(", ")}`);
+		for (const note of summary.notes) parts.push(`  note: ${note}`);
+		return parts.join("\n");
+	});
+}
+
 export function buildDispatchPacket(
 	ctx: BuildPacketContext,
 	request: DispatchRequest,
@@ -51,6 +61,8 @@ export function buildDispatchPacket(
 	const step = active.currentStep
 		? { id: active.currentStep.id, summary: active.currentStep.summary, status: active.currentStep.status }
 		: undefined;
+	const completedOutcomes = ctx.taskState.getCompletedOutcomeSummaries();
+	const priorTaskSummaries = formatOutcomeSummaries(completedOutcomes);
 	const common = {
 		role: request.role,
 		workflow: ctx.runtime.activeWorkflow,
@@ -60,7 +72,10 @@ export function buildDispatchPacket(
 		step,
 		goal: request.goal,
 		hardConstraints: alignedSummaries(ctx.alignmentState.categories, "constraints"),
-		priorFindings: ctx.subagentState.getInvestigatorFindings(task?.id),
+		priorFindings: [
+			...ctx.subagentState.getInvestigatorFindings(task?.id),
+			...priorTaskSummaries,
+		],
 		successTarget: request.successTarget,
 	} as const;
 

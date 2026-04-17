@@ -147,6 +147,40 @@ describe("task state", () => {
 		assert.deepEqual(state.tasks[0].commitHashes, ["abc123"]);
 	});
 
+	it("records a task outcome summary", () => {
+		const state = new TaskState();
+		state.addTask({ summary: "Build feature", description: "Desc", alignmentNeeded: true });
+
+		state.recordTaskOutcome("01-build-feature", {
+			changedFiles: ["extensions/workflows/state/task-state.ts"],
+			relevantSymbols: ["TaskState.recordTaskCommit"],
+			notes: ["commit hashes are deduplicated"],
+		});
+
+		const outcome = state.tasks[0].outcomeSummary;
+		assert.ok(outcome !== undefined);
+		assert.deepEqual(outcome.changedFiles, ["extensions/workflows/state/task-state.ts"]);
+		assert.deepEqual(outcome.relevantSymbols, ["TaskState.recordTaskCommit"]);
+		assert.deepEqual(outcome.notes, ["commit hashes are deduplicated"]);
+	});
+
+	it("getCompletedOutcomeSummaries returns only tasks with a recorded outcome", () => {
+		const state = new TaskState();
+		state.addTask({ summary: "Task one", description: "Desc", alignmentNeeded: true });
+		state.addTask({ summary: "Task two", description: "Desc", alignmentNeeded: true });
+
+		state.recordTaskOutcome("01-task-one", {
+			changedFiles: ["a.ts"],
+			relevantSymbols: ["FooClass"],
+			notes: [],
+		});
+
+		const summaries = state.getCompletedOutcomeSummaries();
+		assert.equal(summaries.length, 1);
+		assert.equal(summaries[0].taskId, "01-task-one");
+		assert.deepEqual(summaries[0].summary.changedFiles, ["a.ts"]);
+	});
+
 	it("selects current task and exposes active task context", () => {
 		const state = new TaskState();
 		state.addTask({

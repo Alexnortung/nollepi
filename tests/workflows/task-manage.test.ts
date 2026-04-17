@@ -73,4 +73,23 @@ describe("task_manage", () => {
 		});
 		assert.equal(state.tasks.length, 1);
 	});
+
+	it("records task outcome summary via record_outcome action", () => {
+		const state = new TaskState();
+		applyTaskAction(state, { action: "create", summary: "Build feature", description: "Desc", alignmentNeeded: true });
+
+		applyTaskAction(state, {
+			action: "record_outcome",
+			taskId: "01-build-feature",
+			changedFiles: ["extensions/workflows/state/task-state.ts"],
+			relevantSymbols: ["TaskOutcomeSummary"],
+			notes: ["Outcome summary now stored on WorkflowTask"],
+		});
+
+		const outcome = state.tasks[0].outcomeSummary;
+		assert.ok(outcome !== undefined);
+		assert.deepEqual(outcome.changedFiles, ["extensions/workflows/state/task-state.ts"]);
+		assert.deepEqual(outcome.relevantSymbols, ["TaskOutcomeSummary"]);
+		assert.deepEqual(outcome.notes, ["Outcome summary now stored on WorkflowTask"]);
+	});
 });

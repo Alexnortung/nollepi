@@ -21,9 +21,9 @@ function getAlignmentStateGuidance(state: string): string {
 		case "internal-review":
 			return "The current task should still be handled through the task orchestrator. Review the task work before presenting it to the human. Dispatch a reviewer after implementation exists to check against the task description and aligned constraints.";
 		case "human-review":
-			return "The current task should still be handled through the task orchestrator. Present results, including a proposed commit message. Take human feedback seriously. Protect human manual edits. If the human already committed, supply the existing commit hash so the transition can record it instead of creating a duplicate commit. If review completes successfully, transition directly to next-task or finish, carrying commit intent, commit message, or existing commit hash data on workflow_transition when relevant.";
+			return "The current task should still be handled through the task orchestrator. Present results, including a proposed commit message. Take human feedback seriously. Protect human manual edits. If the human already committed, supply the existing commit hash so the transition can record it instead of creating a duplicate commit. When review completes successfully, call task_manage record_outcome with changedFiles, relevantSymbols (new functions, classes, types), and notes relevant to the human or later tasks — then transition directly to next-task or finish, carrying commit intent, commit message, or existing commit hash data on workflow_transition when relevant.";
 		case "next-task":
-			return "Return to the high-level orchestrator view and move to the next task in the approved list.";
+			return "Return to the high-level orchestrator view. Present a brief summary of what the just-completed task produced (the recorded outcome) and show the remaining approved task list. Wait for the human to decide whether to proceed, adjust the task list, or finish. Do not proactively suggest task list changes — the human leads that decision.";
 		case "finish":
 			return "Workflow complete. Wrap up and summarize. Can switch to another workflow.";
 		default:
