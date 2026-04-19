@@ -11,6 +11,10 @@
       url = "github:tmustier/pi-extensions";
       flake = false;
     };
+    "mitsupi" = {
+      url = "github:mitsuhiko/agent-stuff";
+      flake = false;
+    };
   };
 
   outputs =
@@ -54,6 +58,12 @@
           cp ${packagedManifest} "$out/package.json"
           cp -R ${./extensions}/* "$out/extensions/"
           cp -R ${./skills} "$out/skills"
+
+          mkdir -p "$out/extensions/utils"
+          cp ${inputs.mitsupi}/extensions/btw.ts "$out/extensions/utils/btw.ts"
+          # Patch btw extension
+          sed -i 's/session\.agent\.replaceMessages(seedMessages as typeof session\.state\.messages);/session.agent.state.messages = seedMessages as typeof session.state.messages;/' "$out/extensions/utils/btw.ts"
+          cp ${inputs.mitsupi}/extensions/context.ts "$out/extensions/utils/context.ts"
 
           for file in index.ts package.json README.md CHANGELOG.md LICENSE screenshot.png; do
             if [ ! -e ${usageExtensionSrc}/$file ]; then

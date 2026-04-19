@@ -17,6 +17,7 @@
 	"pi": {
 		"extensions": [
 			"./extensions/guards",
+			"./extensions/utils",
 			"./extensions/pi-usage-extension",
 			"./extensions/workflows"
 		],
