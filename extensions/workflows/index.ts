@@ -1,4 +1,5 @@
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import { Box, Text } from "@mariozechner/pi-tui";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { readTaskStateFromArtifacts } from "./artifacts/reader.ts";
@@ -8,6 +9,15 @@ import { getRunTitleCandidate, shouldCreateRunArtifacts } from "./artifacts/run-
 import { writeWorkflowArtifacts } from "./artifacts/writer.ts";
 import { buildWorkflowPrompt } from "./prompts/prompt-builder.ts";
 import { renderSidebar, type SidebarState } from "./sidebar/renderer.ts";
+import {
+	extractLastOutputLine,
+	getVisibleSubagentRuns,
+	isTaskOrchestratorVisible,
+	renderSubagentCardLines,
+	renderTaskOrchestratorCardLines,
+	type SubagentWidgetRun,
+	type SubagentWidgetTaskOrchestrator,
+} from "./sidebar/subagent-widget.ts";
 import { AlignmentState } from "./state/alignment-state.ts";
 import { restoreState, serializeState, type WorkflowExtensionState } from "./state/persistence.ts";
 import { SubagentState } from "./state/subagent-state.ts";
@@ -24,6 +34,7 @@ import { createTaskOrchestratorSessionFile, spawnTaskOrchestratorTurn } from "./
 import { spawnSubagentProcess } from "./subagents/spawner.ts";
 import { registerAlignmentManageTool } from "./tools/alignment-manage-tool.ts";
 import { registerDispatchSubagentTool } from "./tools/dispatch-subagent-tool.ts";
+import { registerSubagentMessageRenderers } from "./sidebar/message-renderers.ts";
 import { prepareSubagentDispatch, shouldAutoTriggerSubagentResult } from "./tools/dispatch-subagent.ts";
 import { registerWorkflowStateTool } from "./tools/workflow-info.ts";
 import { registerStepManageTool } from "./tools/step-manage-tool.ts";
@@ -45,6 +56,7 @@ export default function workflowExtension(pi: ExtensionAPI): void {
 	let subagentState = new SubagentState();
 	let taskOrchestratorState = new TaskOrchestratorState();
 	let latestUiContext: WorkflowContext | undefined;
+	const activeSubagentWidgetKeys = new Set<string>();
 	const mtimeTracker = new MtimeTracker();
 
 	function persistState(): void {
@@ -456,6 +468,31 @@ export default function workflowExtension(pi: ExtensionAPI): void {
 		};
 	}
 
+	function buildSubagentWidgetRuns(): SubagentWidgetRun[] {
+		return subagentState.runs.map((run) => ({
+			id: run.id,
+			role: run.role,
+			status: run.status,
+			goal: run.goal,
+			taskPreview: run.taskPreview,
+			elapsedSeconds: Math.max(0, Math.round(((run.finishedAt ?? Date.now()) - run.startedAt) / 1000)),
+			toolCalls: run.toolCalls,
+			lastOutputLine: extractLastOutputLine(run.outputText),
+		}));
+	}
+
+	function buildSubagentWidgetTaskOrchestrator(): SubagentWidgetTaskOrchestrator | undefined {
+		const session = taskOrchestratorState.getSession();
+		if (!session) return undefined;
+		return {
+			status: session.status,
+			taskPreview: session.taskPreview,
+			elapsedSeconds: Math.max(0, Math.round(((session.finishedAt ?? Date.now()) - session.startedAt) / 1000)),
+			turnCount: session.turnCount,
+			lastOutputLine: extractLastOutputLine(session.outputText),
+		};
+	}
+
 	function updateStatus(ctx: WorkflowContext): void {
 		latestUiContext = ctx;
 		if (!ctx.hasUI) return;
@@ -472,6 +509,46 @@ export default function workflowExtension(pi: ExtensionAPI): void {
 		} else {
 			ctx.ui.setWidget("workflow-sidebar", undefined);
 		}
+
+		// Per-subagent stacking widgets keyed by run id
+		const newWidgetKeys = new Set<string>();
+
+		const widgetTaskOrchestrator = buildSubagentWidgetTaskOrchestrator();
+		if (isTaskOrchestratorVisible(widgetTaskOrchestrator)) {
+			const key = "wf-task-orch";
+			newWidgetKeys.add(key);
+			ctx.ui.setWidget(key, (_tui, theme) => {
+				const to = buildSubagentWidgetTaskOrchestrator();
+				if (!to) return new Text("");
+				const lines = renderTaskOrchestratorCardLines(to, theme);
+				const box = new Box(1, 0, (t: string) => theme.bg("customMessageBg", t));
+				box.addChild(new Text(lines.join("\n")));
+				return box;
+			});
+		}
+
+		const visibleRuns = getVisibleSubagentRuns(buildSubagentWidgetRuns());
+		for (const run of visibleRuns) {
+			const key = `wf-sub-${run.id}`;
+			newWidgetKeys.add(key);
+			ctx.ui.setWidget(key, (_tui, theme) => {
+				const freshRun = buildSubagentWidgetRuns().find((r) => r.id === run.id);
+				if (!freshRun) return new Text("");
+				const lines = renderSubagentCardLines(freshRun, theme);
+				const box = new Box(1, 0, (t: string) => theme.bg("customMessageBg", t));
+				box.addChild(new Text(lines.join("\n")));
+				return box;
+			});
+		}
+
+		// Remove stale widgets
+		for (const oldKey of activeSubagentWidgetKeys) {
+			if (!newWidgetKeys.has(oldKey)) {
+				ctx.ui.setWidget(oldKey, undefined);
+			}
+		}
+		activeSubagentWidgetKeys.clear();
+		for (const key of newWidgetKeys) activeSubagentWidgetKeys.add(key);
 	}
 
 	function handleSwitch(_newWorkflow: WorkflowName): void {
@@ -483,6 +560,7 @@ export default function workflowExtension(pi: ExtensionAPI): void {
 
 	registerWorkflowStateTool(pi, () => runtime, () => taskState, () => alignmentState, () => subagentState, () => taskOrchestratorState);
 	registerWorkflowSwitchTool(pi, () => runtime, handleSwitch);
+	registerSubagentMessageRenderers(pi);
 	registerTaskManageTool(pi, () => taskState, () => {
 		persistState();
 		void syncArtifacts().then(() => persistState());
