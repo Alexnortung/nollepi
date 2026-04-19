@@ -1,9 +1,11 @@
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import { Box, Text } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
 import type { AlignmentState } from "../state/alignment-state.ts";
 import type { SubagentState } from "../state/subagent-state.ts";
 import type { TaskState } from "../state/task-state.ts";
 import type { WorkflowRuntime } from "../state/workflow-state.ts";
+import { renderDispatchCallText, renderDispatchResultText } from "../sidebar/subagent-widget.ts";
 import { spawnSubagentProcess } from "../subagents/spawner.ts";
 import { prepareSubagentDispatch, shouldAutoTriggerSubagentResult } from "./dispatch-subagent.ts";
 
@@ -107,6 +109,20 @@ export function registerDispatchSubagentTool(
 				content: [{ type: "text", text: `Dispatched ${prepared.run.role} #${prepared.run.id} in background.` }],
 				details: { run: prepared.run, packet: prepared.packet },
 			};
+		},
+		renderCall(args, theme, _context) {
+			const lines = renderDispatchCallText(args.role, args.goal);
+			const box = new Box(1, 0, (t) => theme.bg("customMessageBg", t));
+			box.addChild(new Text(`${theme.bold(lines[0])}\n${theme.fg("dim", lines[1])}`));
+			return box;
+		},
+		renderResult(result, _options, theme, _context) {
+			const details = result.details as { run: { id: number; role: string }; packet: unknown } | undefined;
+			if (!details?.run) {
+				return new Text(theme.fg("muted", "Dispatched subagent."));
+			}
+			const text = renderDispatchResultText(details.run.role, details.run.id);
+			return new Text(theme.fg("success", text));
 		},
 	});
 }
