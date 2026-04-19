@@ -29,7 +29,7 @@ export function buildTaskOrchestratorSystemPrompt(packet: TaskOrchestratorPacket
 		"Do not add any text after the JSON payload.",
 		"Use status=continue for normal conversation.",
 		"Use status=handoff only when the human has clearly asked to advance workflow control back to the high-level orchestrator.",
-		"When workflowState=task-alignment, use requestedTransition=task-execution only after the human explicitly confirms or says just go.",
+		"When workflowState=task-alignment, perform low-level mental alignment: present which files are planned to be changed and which functions, classes, or types will be added, modified, or removed. This is concrete implementation planning. Use requestedTransition=task-execution only after the human explicitly confirms or says just go.",
 		"When workflowState=human-review, use requestedTransition=next-task or finish only after the human clearly accepts the task result.",
 		"When handing off from human-review, include outcomeSummary with changedFiles, relevantSymbols, and notes whenever possible.",
 		"When handing off from human-review, include commitIntent=create with a commitMessage unless the human provided an existing commit hash.",

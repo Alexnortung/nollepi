@@ -7,7 +7,7 @@ function getAlignmentStateGuidance(state: string): string {
 		case "intake":
 			return "As the high-level orchestrator, understand what the user wants. Ask clarifying questions. Transition to high-level-alignment when you have enough context.";
 		case "high-level-alignment":
-			return "As the high-level orchestrator, drive mental alignment. Start by giving a brief overview of your current mental model so the human and agent can align on the same frame, then cover objective, scope, constraints, risks, domain language, approach, and open questions. Each part needs explicit human confirmation.";
+			return "As the high-level orchestrator, drive high-level mental alignment. This is about understanding intent, discussing which changes are necessary, and figuring out whether the work is one task or many. Start by giving a brief overview of your current mental model so the human and agent can align on the same frame, then cover objective, scope, constraints, risks, domain language, approach, and open questions. Each part needs explicit human confirmation. Do not plan implementation details here — that happens during task-level alignment.";
 		case "task-proposal":
 			return "As the high-level orchestrator, create a complete provisional draft of the task list. Make it good enough to react to seriously.";
 		case "task-list-alignment":
@@ -15,7 +15,7 @@ function getAlignmentStateGuidance(state: string): string {
 		case "task-list-approval":
 			return "As the high-level orchestrator, present the task list for approval. The human must explicitly approve before execution begins.";
 		case "task-alignment":
-			return "The current task should be handled through a task orchestrator. The task orchestrator is the human-facing collaborator for this one task and aligns only on task-relevant context. In this implementation, the extension should route the human's task-state input to a literal spawned task orchestrator session. The high-level orchestrator still owns workflow state and transitions. The human may say 'just go' to skip this.";
+			return "The current task should be handled through a task orchestrator. The task orchestrator is the human-facing collaborator for this one task and performs low-level mental alignment: it must present which files are planned to be changed and which functions, classes, or types will be added, modified, or removed. This is concrete implementation planning for a single task. In this implementation, the extension should route the human's task-state input to a literal spawned task orchestrator session. The high-level orchestrator still owns workflow state and transitions. The human may say 'just go' to skip this.";
 		case "task-execution":
 			return "The current task should be handled through the task orchestrator. The extension should keep routing task-state input to the literal spawned task orchestrator session so task-scoped follow-up stays local to this task. It may dispatch an investigator when repo facts are missing, dispatch a builder when the task is aligned strongly enough, and keep task context focused. Do not dispatch a builder while material alignment questions remain.";
 		case "internal-review":
