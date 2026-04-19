@@ -23,6 +23,7 @@ import { restoreState, serializeState, type WorkflowExtensionState } from "./sta
 import { SubagentState } from "./state/subagent-state.ts";
 import { TaskOrchestratorState, type TaskOrchestratorDispatchRequest, type TaskOrchestratorResult } from "./state/task-orchestrator-state.ts";
 import { TaskState } from "./state/task-state.ts";
+import { recordSubagentCompletionSummary } from "./subagents/completion-notifications.ts";
 import {
 	createWorkflowRuntime,
 	type WorkflowName,
@@ -214,12 +215,8 @@ export default function workflowExtension(pi: ExtensionAPI): void {
 							deliverAs: "followUp",
 							triggerTurn: !shouldAutoRouteSpecialistResultToTaskOrchestrator(prepared.run.taskId) && shouldAutoTriggerSubagentResult(runtime.activeWorkflow, latestUiContext?.isIdle() ?? false),
 						});
-						pi.sendMessage({
-							customType: "workflow-subagent-summary",
-							content: `${prepared.run.role} #${prepared.run.id} finished.`,
-							details: { runId: prepared.run.id, role: prepared.run.role },
-							display: true,
-						}, { deliverAs: "followUp", triggerTurn: false });
+						recordSubagentCompletionSummary(pi, prepared.run);
+						refreshUi();
 						if (shouldAutoRouteSpecialistResultToTaskOrchestrator(prepared.run.taskId)) {
 							scheduleTaskOrchestratorFollowUp(buildSpecialistFollowUpMessage(prepared.run.id, prepared.run.role, result), ctx);
 						}
@@ -228,12 +225,8 @@ export default function workflowExtension(pi: ExtensionAPI): void {
 						subagentState.failRun(prepared.run.id, message);
 						persistState();
 						refreshUi();
-						pi.sendMessage({
-							customType: "workflow-subagent-summary",
-							content: `${prepared.run.role} #${prepared.run.id} failed: ${message}`,
-							details: { runId: prepared.run.id, role: prepared.run.role, error: message },
-							display: true,
-						}, { deliverAs: "followUp", triggerTurn: false });
+						recordSubagentCompletionSummary(pi, prepared.run, message);
+						refreshUi();
 						if (shouldAutoRouteSpecialistResultToTaskOrchestrator(prepared.run.taskId)) {
 							scheduleTaskOrchestratorFollowUp(
 								`A requested ${prepared.run.role} dispatch failed. Explain the failure and decide the next task-scoped action.\n\nError:\n${message}`,

@@ -6,6 +6,7 @@ import type { SubagentState } from "../state/subagent-state.ts";
 import type { TaskState } from "../state/task-state.ts";
 import type { WorkflowRuntime } from "../state/workflow-state.ts";
 import { renderDispatchCallText, renderDispatchResultText } from "../sidebar/subagent-widget.ts";
+import { recordSubagentCompletionSummary } from "../subagents/completion-notifications.ts";
 import { spawnSubagentProcess } from "../subagents/spawner.ts";
 import { prepareSubagentDispatch, shouldAutoTriggerSubagentResult } from "./dispatch-subagent.ts";
 
@@ -85,23 +86,15 @@ export function registerDispatchSubagentTool(
 						deliverAs: "followUp",
 						triggerTurn: shouldAutoTriggerSubagentResult(deps.getRuntime().activeWorkflow, deps.isIdle()),
 					});
-					pi.sendMessage({
-						customType: "workflow-subagent-summary",
-						content: `${prepared.run.role} #${prepared.run.id} finished.`,
-						details: { runId: prepared.run.id, role: prepared.run.role },
-						display: true,
-					}, { deliverAs: "followUp", triggerTurn: false });
+					recordSubagentCompletionSummary(pi, prepared.run);
+					deps.requestUiRefresh();
 				},
 				onError: (message) => {
 					deps.getSubagentState().failRun(prepared.run.id, message);
 					deps.persistState();
 					deps.requestUiRefresh();
-					pi.sendMessage({
-						customType: "workflow-subagent-summary",
-						content: `${prepared.run.role} #${prepared.run.id} failed: ${message}`,
-						details: { runId: prepared.run.id, role: prepared.run.role, error: message },
-						display: true,
-					}, { deliverAs: "followUp", triggerTurn: false });
+					recordSubagentCompletionSummary(pi, prepared.run, message);
+					deps.requestUiRefresh();
 				},
 			});
 
