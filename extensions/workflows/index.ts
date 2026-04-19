@@ -19,10 +19,12 @@ import {
 	type SubagentWidgetTaskOrchestrator,
 } from "./sidebar/subagent-widget.ts";
 import { AlignmentState } from "./state/alignment-state.ts";
-import { restoreState, serializeState, type WorkflowExtensionState } from "./state/persistence.ts";
+import { restorePersistedWorkflowState, toPersistedWorkflowState } from "./state/persisted-state.ts";
+import { ArtifactWorkflowPersistenceBackend } from "./state/artifact-workflow-persistence.ts";
 import { SubagentState } from "./state/subagent-state.ts";
 import { TaskOrchestratorState, type TaskOrchestratorDispatchRequest, type TaskOrchestratorResult } from "./state/task-orchestrator-state.ts";
 import { TaskState } from "./state/task-state.ts";
+import type { WorkflowPersistenceRevision } from "./state/workflow-persistence.ts";
 import { recordSubagentCompletionSummary } from "./subagents/completion-notifications.ts";
 import {
 	createWorkflowRuntime,
@@ -46,8 +48,6 @@ import { registerWorkflowSwitchTool } from "./tools/workflow-switch.ts";
 import { registerWorkflowTransitionTool } from "./tools/workflow-transition.ts";
 import { applyReviewCommit } from "./tools/review-commit.ts";
 
-const CUSTOM_ENTRY_TYPE = "workflow-state";
-
 type WorkflowContext = Parameters<Parameters<ExtensionAPI["on"]>[1]>[1];
 
 export default function workflowExtension(pi: ExtensionAPI): void {
@@ -57,14 +57,28 @@ export default function workflowExtension(pi: ExtensionAPI): void {
 	let subagentState = new SubagentState();
 	let taskOrchestratorState = new TaskOrchestratorState();
 	let latestUiContext: WorkflowContext | undefined;
+	const workflowPersistence = new ArtifactWorkflowPersistenceBackend(process.cwd());
+	let workflowPersistenceRevision: WorkflowPersistenceRevision | undefined;
+	let workflowPersistenceSaveQueue = Promise.resolve();
 	const activeSubagentWidgetKeys = new Set<string>();
 	const mtimeTracker = new MtimeTracker();
 
-	function persistState(): void {
-		pi.appendEntry(
-			CUSTOM_ENTRY_TYPE,
-			serializeState(runtime, mtimeTracker.toMap(), taskState, alignmentState, subagentState, taskOrchestratorState),
-		);
+	function persistState(): Promise<void> {
+		const state = toPersistedWorkflowState(runtime, taskState, alignmentState);
+		const saveTask = async (): Promise<void> => {
+			const result = await workflowPersistence.save({
+				state,
+				expectedRevision: workflowPersistenceRevision,
+			});
+			if (result.ok) {
+				workflowPersistenceRevision = result.revision;
+				return;
+			}
+			workflowPersistenceRevision = result.currentRevision;
+			console.warn("Workflow persistence save skipped because the stored revision is stale.");
+		};
+		workflowPersistenceSaveQueue = workflowPersistenceSaveQueue.then(saveTask, saveTask);
+		return workflowPersistenceSaveQueue;
 	}
 
 	function usesTaskOrchestratorRouting(): boolean {
@@ -124,9 +138,9 @@ export default function workflowExtension(pi: ExtensionAPI): void {
 			}
 		}
 		applyToolSet();
-		persistState();
+		await persistState();
 		await syncArtifacts();
-		persistState();
+		await persistState();
 		refreshUi();
 	}
 
@@ -153,7 +167,6 @@ export default function workflowExtension(pi: ExtensionAPI): void {
 		if (!session || session.status === "closed") return;
 		if (session.status === "running") {
 			taskOrchestratorState.enqueueFollowUpMessage(message);
-			persistState();
 			refreshUi();
 			return;
 		}
@@ -166,11 +179,9 @@ export default function workflowExtension(pi: ExtensionAPI): void {
 		const nextMessage = taskOrchestratorState.dequeueFollowUpMessage();
 		if (!nextMessage) {
 			taskOrchestratorState.closeIfDrained(countActiveTaskSpecialists(session.taskId));
-			persistState();
 			refreshUi();
 			return;
 		}
-		persistState();
 		refreshUi();
 		runTaskOrchestratorTurn(nextMessage, { ctx });
 	}
@@ -188,23 +199,20 @@ export default function workflowExtension(pi: ExtensionAPI): void {
 					request,
 				);
 
-				persistState();
+				// Subagent state is runtime-only, so background streaming updates do not trigger durable saves.
 				refreshUi();
 
 				spawnSubagentProcess(pi, ctx?.cwd ?? process.cwd(), prepared.run, prepared.packet, {
 					onText: (delta) => {
 						subagentState.appendText(prepared.run.id, delta);
-						persistState();
 						refreshUi();
 					},
 					onToolCall: () => {
 						subagentState.recordToolCall(prepared.run.id);
-						persistState();
 						refreshUi();
 					},
 					onFinish: (result) => {
 						subagentState.finishRun(prepared.run.id, result, "done");
-						persistState();
 						refreshUi();
 						pi.sendMessage({
 							customType: "workflow-subagent-result",
@@ -223,7 +231,6 @@ export default function workflowExtension(pi: ExtensionAPI): void {
 					},
 					onError: (message) => {
 						subagentState.failRun(prepared.run.id, message);
-						persistState();
 						refreshUi();
 						recordSubagentCompletionSummary(pi, prepared.run, message);
 						refreshUi();
@@ -262,7 +269,7 @@ export default function workflowExtension(pi: ExtensionAPI): void {
 			sessionFile: existing?.taskId === active.currentTask.id ? existing.sessionFile : createTaskOrchestratorSessionFile(active.currentTask.id),
 		});
 		taskOrchestratorState.startTurn();
-		persistState();
+		// Task orchestrator session state is runtime-only, so refresh the UI without writing durable workflow state.
 		refreshUi();
 
 		const packet = buildTaskOrchestratorPacket({
@@ -275,12 +282,10 @@ export default function workflowExtension(pi: ExtensionAPI): void {
 		spawnTaskOrchestratorTurn(pi, options?.ctx?.cwd ?? process.cwd(), session, packet, userMessage, {
 			onText: (delta) => {
 				taskOrchestratorState.appendText(delta);
-				persistState();
 				refreshUi();
 			},
 			onToolCall: () => {
 				taskOrchestratorState.recordToolCall();
-				persistState();
 				refreshUi();
 			},
 			onFinish: (result, displayText) => {
@@ -311,21 +316,18 @@ export default function workflowExtension(pi: ExtensionAPI): void {
 					}
 					if (taskOrchestratorState.getSession()?.status !== "closed") {
 						taskOrchestratorState.finishTurn(result, displayText);
-						persistState();
 						refreshUi();
 						flushQueuedTaskOrchestratorFollowUp(options?.ctx);
 					}
 				})().catch((error: unknown) => {
 					const message = error instanceof Error ? error.message : String(error);
 					taskOrchestratorState.failTurn(message);
-					persistState();
 					refreshUi();
 					if (options?.ctx?.hasUI) options.ctx.ui.notify(`Task orchestrator handoff failed: ${message}`, "error");
 				});
 			},
 			onError: (message) => {
 				taskOrchestratorState.failTurn(message);
-				persistState();
 				refreshUi();
 				pi.sendMessage({
 					customType: "workflow-task-orchestrator-message",
@@ -392,6 +394,18 @@ export default function workflowExtension(pi: ExtensionAPI): void {
 		mtimeTracker.clear();
 		if (!runtime.runId) return;
 		await mtimeTracker.recordMtimes(getTrackedArtifactPaths(runtime.runId));
+	}
+
+	async function rehydrateArtifactLinkageFromDisk(): Promise<void> {
+		if (!runtime.runId || !usesArtifactRuns()) return;
+		try {
+			const restored = await readTaskStateFromArtifacts(process.cwd(), runtime.runId);
+			taskState.rehydrateArtifactLinkage(restored.taskState);
+			await recordArtifactMtimes();
+		} catch (error: unknown) {
+			if ((error as NodeJS.ErrnoException | undefined)?.code === "ENOENT") return;
+			console.warn(`Workflow artifact linkage rehydration failed: ${error instanceof Error ? error.message : String(error)}`);
+		}
 	}
 
 	async function syncArtifacts(): Promise<void> {
@@ -697,7 +711,7 @@ export default function workflowExtension(pi: ExtensionAPI): void {
 				}
 			}
 			await recordArtifactMtimes();
-			persistState();
+			await persistState();
 			refreshUi();
 
 			if (ctx.hasUI) {
@@ -711,22 +725,22 @@ export default function workflowExtension(pi: ExtensionAPI): void {
 	});
 
 	pi.on("session_start", async (_event, ctx) => {
-		const entries = ctx.sessionManager.getEntries();
-		const lastEntry = entries
-			.filter((entry: { type: string; customType?: string }) => entry.type === "custom" && entry.customType === CUSTOM_ENTRY_TYPE)
-			.pop() as { data?: WorkflowExtensionState } | undefined;
+		workflowPersistenceSaveQueue = Promise.resolve();
+		const loaded = await workflowPersistence.load();
+		workflowPersistenceRevision = loaded?.revision;
 
-		const restored = restoreState(lastEntry?.data);
+		const restored = restorePersistedWorkflowState(loaded?.state);
 		runtime = restored.runtime;
 		taskState = restored.taskState;
 		alignmentState = restored.alignmentState;
-		subagentState = restored.subagentState;
-		taskOrchestratorState = restored.taskOrchestratorState;
-		mtimeTracker.restoreFromMap(restored.artifactMtimes);
+		subagentState = new SubagentState();
+		taskOrchestratorState = new TaskOrchestratorState();
+		mtimeTracker.clear();
 		if (usesArtifactRuns() && !shouldCreateRunArtifacts(runtime.activeWorkflow, runtime.workflowState)) {
 			runtime.runId = undefined;
 			mtimeTracker.clear();
 		}
+		await rehydrateArtifactLinkageFromDisk();
 		latestUiContext = ctx;
 
 		applyToolSet();
@@ -751,7 +765,7 @@ export default function workflowExtension(pi: ExtensionAPI): void {
 				"The following workflow artifacts were modified since the last turn:\n" +
 				changed.map((filePath) => `- ${filePath}`).join("\n") +
 				"\nConsider using /reread or re-reading these files to update your understanding.";
-			persistState();
+			await persistState();
 		}
 
 		const active = taskState.getActiveTaskContext();

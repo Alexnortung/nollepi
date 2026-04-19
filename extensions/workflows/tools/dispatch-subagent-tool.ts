@@ -59,23 +59,20 @@ export function registerDispatchSubagentTool(
 						: { role: "investigator", goal: params.goal, successTarget: params.successTarget },
 			);
 
-			deps.persistState();
+			// Subagent run state is runtime-only, so streaming updates should refresh UI only.
 			deps.requestUiRefresh();
 
 			spawnSubagentProcess(pi, ctx.cwd, prepared.run, prepared.packet, {
 				onText: (delta) => {
 					deps.getSubagentState().appendText(prepared.run.id, delta);
-					deps.persistState();
 					deps.requestUiRefresh();
 				},
 				onToolCall: () => {
 					deps.getSubagentState().recordToolCall(prepared.run.id);
-					deps.persistState();
 					deps.requestUiRefresh();
 				},
 				onFinish: (result) => {
 					deps.getSubagentState().finishRun(prepared.run.id, result, "done");
-					deps.persistState();
 					deps.requestUiRefresh();
 					pi.sendMessage({
 						customType: "workflow-subagent-result",
@@ -91,7 +88,6 @@ export function registerDispatchSubagentTool(
 				},
 				onError: (message) => {
 					deps.getSubagentState().failRun(prepared.run.id, message);
-					deps.persistState();
 					deps.requestUiRefresh();
 					recordSubagentCompletionSummary(pi, prepared.run, message);
 					deps.requestUiRefresh();

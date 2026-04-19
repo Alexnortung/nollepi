@@ -1,15 +1,17 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { MtimeTracker } from "../../extensions/workflows/artifacts/mtime-tracker.ts";
+import * as fs from "node:fs/promises";
+import * as os from "node:os";
+import * as path from "node:path";
 import { buildWorkflowPrompt } from "../../extensions/workflows/prompts/prompt-builder.ts";
-import { restoreState, serializeState } from "../../extensions/workflows/state/persistence.ts";
+import { ArtifactWorkflowPersistenceBackend } from "../../extensions/workflows/state/artifact-workflow-persistence.ts";
+import { restorePersistedWorkflowState, toPersistedWorkflowState } from "../../extensions/workflows/state/persisted-state.ts";
 import { createWorkflowRuntime } from "../../extensions/workflows/state/workflow-state.ts";
 import { getToolsForWorkflow } from "../../extensions/workflows/tools/tool-sets.ts";
 
 describe("workflow system integration", () => {
-	it("full lifecycle: base → alignment → finish → base", () => {
+	it("full lifecycle: base → alignment → finish → base", async () => {
 		const runtime = createWorkflowRuntime();
-		const tracker = new MtimeTracker();
 
 		assert.equal(runtime.activeWorkflow, "base");
 		assert.equal(buildWorkflowPrompt(runtime).includes("base"), true);
@@ -28,28 +30,40 @@ describe("workflow system integration", () => {
 		assert.ok(alignmentPrompt.includes("intake"));
 
 		runtime.runId = "2026-04-16-01-test";
-		const serialized = serializeState(runtime, tracker.toMap());
-		const { runtime: restored } = restoreState(serialized);
-		assert.equal(restored.activeWorkflow, "alignment");
-		assert.equal(restored.workflowState, "intake");
-		assert.equal(restored.runId, "2026-04-16-01-test");
 
-		assert.equal(restored.canSwitch(), false);
-		assert.throws(() => restored.switchTo("base"));
+		const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pi-workflow-integration-"));
+		try {
+			const backend = new ArtifactWorkflowPersistenceBackend(tmpDir);
+			const save = await backend.save({
+				state: toPersistedWorkflowState(runtime, undefined, undefined),
+				expectedRevision: undefined,
+			});
+			assert.equal(save.ok, true);
+			const loaded = await backend.load();
+			const { runtime: restored } = restorePersistedWorkflowState(loaded?.state);
+			assert.equal(restored.activeWorkflow, "alignment");
+			assert.equal(restored.workflowState, "intake");
+			assert.equal(restored.runId, "2026-04-16-01-test");
+		} finally {
+			await fs.rm(tmpDir, { recursive: true, force: true });
+		}
 
-		restored.transition("high-level-alignment");
-		restored.transition("task-proposal");
-		restored.transition("task-list-alignment");
-		restored.transition("task-list-approval");
-		restored.transition("task-execution");
-		restored.transition("internal-review");
-		restored.transition("human-review");
-		restored.transition("finish");
-		assert.equal(restored.canSwitch(), true);
+		assert.equal(runtime.canSwitch(), false);
+		assert.throws(() => runtime.switchTo("base"));
 
-		restored.switchTo("base");
-		assert.equal(restored.activeWorkflow, "base");
-		assert.equal(restored.workflowState, "idle");
+		runtime.transition("high-level-alignment");
+		runtime.transition("task-proposal");
+		runtime.transition("task-list-alignment");
+		runtime.transition("task-list-approval");
+		runtime.transition("task-execution");
+		runtime.transition("internal-review");
+		runtime.transition("human-review");
+		runtime.transition("finish");
+		assert.equal(runtime.canSwitch(), true);
+
+		runtime.switchTo("base");
+		assert.equal(runtime.activeWorkflow, "base");
+		assert.equal(runtime.workflowState, "idle");
 	});
 
 	it("full lifecycle: base → autonomous → finish → base", () => {

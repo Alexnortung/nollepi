@@ -262,6 +262,27 @@ export class TaskState implements TaskRuntimeState {
 		return { currentTask, currentStep };
 	}
 
+	rehydrateArtifactLinkage(source: Pick<TaskState, "tasks">): void {
+		this.tasks = this.tasks.map((task) => {
+			const sourceTask = source.tasks.find((candidate) => candidate.id === task.id);
+			if (!sourceTask) return task;
+			return {
+				...task,
+				taskDir: sourceTask.taskDir,
+				taskMdPath: sourceTask.taskMdPath,
+				steps: task.steps.map((step) => {
+					const sourceStep = sourceTask.steps.find((candidate) => candidate.id === step.id);
+					if (!sourceStep) return step;
+					return {
+						...step,
+						hasArtifact: sourceStep.hasArtifact,
+						artifactPath: sourceStep.artifactPath,
+					};
+				}),
+			};
+		});
+	}
+
 	serialize(): TaskRuntimeState {
 		return {
 			runTitle: this.runTitle,

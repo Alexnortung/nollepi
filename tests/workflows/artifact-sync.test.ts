@@ -4,6 +4,8 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import { TaskState } from "../../extensions/workflows/state/task-state.ts";
+import { restorePersistedWorkflowState, toPersistedWorkflowState } from "../../extensions/workflows/state/persisted-state.ts";
+import { createWorkflowRuntime } from "../../extensions/workflows/state/workflow-state.ts";
 import { writeWorkflowArtifacts } from "../../extensions/workflows/artifacts/writer.ts";
 import { readTaskStateFromArtifacts } from "../../extensions/workflows/artifacts/reader.ts";
 
@@ -81,6 +83,60 @@ describe("artifact sync", () => {
 		assert.equal(restored.taskState.tasks[0].steps[0].summary, "Human updated step");
 		assert.equal(restored.taskState.tasks[0].steps[0].description, "Detailed reviewer notes");
 		assert.equal(restored.taskState.tasks[0].steps[0].status, "in-progress");
+
+		await fs.rm(tmpDir, { recursive: true, force: true });
+	});
+
+	it("preserves step artifact links across persistence restore and the next artifact sync", async () => {
+		const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "workflow-artifacts-"));
+		const runtime = createWorkflowRuntime();
+		runtime.switchTo("alignment");
+		runtime.transition("intake");
+		runtime.transition("high-level-alignment");
+		runtime.transition("task-proposal");
+		runtime.transition("task-list-alignment");
+		runtime.transition("task-list-approval");
+		runtime.transition("task-execution");
+		runtime.runId = "2026-04-19-01-alignment-artifact-linkage";
+
+		const taskState = new TaskState();
+		taskState.runTitle = "Artifact linkage regression";
+		const task = taskState.addTask({
+			summary: "Keep artifact linkage on resume",
+			description: "Restore persisted state without dropping step artifact links.",
+			alignmentNeeded: true,
+		});
+		taskState.updateTask(task.id, { status: "in-progress" });
+		taskState.addStep({
+			taskId: task.id,
+			summary: "Sync workflow artifacts",
+			description: "Write task and step artifacts for the current run.",
+			hasArtifact: true,
+			artifactPath: "step-1-sync-workflow-artifacts.md",
+		});
+
+		await writeWorkflowArtifacts(tmpDir, {
+			runId: runtime.runId,
+			title: taskState.runTitle,
+			workflowType: runtime.activeWorkflow,
+			workflowState: runtime.workflowState,
+			taskState,
+		});
+
+		const restored = restorePersistedWorkflowState(toPersistedWorkflowState(runtime, taskState));
+		const artifactBacked = await readTaskStateFromArtifacts(tmpDir, runtime.runId);
+		restored.taskState.rehydrateArtifactLinkage(artifactBacked.taskState);
+		await writeWorkflowArtifacts(tmpDir, {
+			runId: runtime.runId,
+			title: restored.taskState.runTitle ?? runtime.runId,
+			workflowType: restored.runtime.activeWorkflow,
+			workflowState: restored.runtime.workflowState,
+			taskState: restored.taskState,
+		});
+
+		const reread = await readTaskStateFromArtifacts(tmpDir, runtime.runId);
+		assert.equal(reread.taskState.tasks[0].steps[0].hasArtifact, true);
+		assert.equal(reread.taskState.tasks[0].steps[0].artifactPath, "step-1-sync-workflow-artifacts.md");
 
 		await fs.rm(tmpDir, { recursive: true, force: true });
 	});

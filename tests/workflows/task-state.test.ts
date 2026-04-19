@@ -181,6 +181,56 @@ describe("task state", () => {
 		assert.deepEqual(summaries[0].summary.changedFiles, ["a.ts"]);
 	});
 
+	it("rehydrates step artifact linkage from artifact-backed task state", () => {
+		const restored = new TaskState({
+			tasks: [{
+				id: "01-update-domain-types",
+				summary: "Persisted summary",
+				description: "Persisted description",
+				status: "in-progress",
+				steps: [{
+					id: "step-1",
+					summary: "Persisted step",
+					description: "Persisted step description",
+					status: "pending",
+					hasArtifact: false,
+				}],
+				commitHashes: [],
+				alignmentNeeded: true,
+				taskDir: "tasks/01-update-domain-types",
+				taskMdPath: "tasks/01-update-domain-types/task.md",
+			}],
+		});
+		const artifactBacked = new TaskState({
+			tasks: [{
+				id: "01-update-domain-types",
+				summary: "Artifact summary",
+				description: "Artifact description",
+				status: "review",
+				steps: [{
+					id: "step-1",
+					summary: "Artifact step",
+					description: "Artifact step description",
+					status: "done",
+					hasArtifact: true,
+					artifactPath: "step-1-update-callers.md",
+				}],
+				commitHashes: [],
+				alignmentNeeded: true,
+				taskDir: "docs/.workflows/runs/example/tasks/01-update-domain-types",
+				taskMdPath: "docs/.workflows/runs/example/tasks/01-update-domain-types/task.md",
+			}],
+		});
+
+		restored.rehydrateArtifactLinkage(artifactBacked);
+
+		assert.equal(restored.tasks[0].summary, "Persisted summary");
+		assert.equal(restored.tasks[0].steps[0].summary, "Persisted step");
+		assert.equal(restored.tasks[0].steps[0].hasArtifact, true);
+		assert.equal(restored.tasks[0].steps[0].artifactPath, "step-1-update-callers.md");
+		assert.equal(restored.tasks[0].taskMdPath, "docs/.workflows/runs/example/tasks/01-update-domain-types/task.md");
+	});
+
 	it("selects current task and exposes active task context", () => {
 		const state = new TaskState();
 		state.addTask({
