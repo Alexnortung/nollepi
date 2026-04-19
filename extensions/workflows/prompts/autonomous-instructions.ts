@@ -19,7 +19,7 @@ function getAutonomousStateGuidance(state: string): string {
 		case "verification":
 			return "Run tests, lints, type checks. Verify the work is correct.";
 		case "commit":
-			return "Commit the verified work. Record commit hashes.";
+			return "Commit the verified work. Record commit hashes. Use conventional commits format by default (type(scope): description). Infer the type (feat, fix, refactor, docs, test, chore, etc.) and scope from the task content. If the repository has a commitlint config, CONTRIBUTING.md with commit guidelines, or other commit convention files, follow those standards instead.";
 		case "next-step":
 			return "Proceed to the next task or step automatically.";
 		case "pull-request":

@@ -35,7 +35,7 @@ function verifyCommitHash(cwd: string, commitHash: string): string {
 }
 
 function buildFallbackCommitMessage(task: WorkflowTask): string {
-	return `feat(workflows): ${task.summary}`;
+	return `feat: ${task.summary}`;
 }
 
 function recordTaskCommit(taskState: TaskState, taskId: string, commitHash: string): void {

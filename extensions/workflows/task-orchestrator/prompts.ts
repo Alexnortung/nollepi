@@ -33,6 +33,7 @@ export function buildTaskOrchestratorSystemPrompt(packet: TaskOrchestratorPacket
 		"When workflowState=human-review, use requestedTransition=next-task or finish only after the human clearly accepts the task result.",
 		"When handing off from human-review, include outcomeSummary with changedFiles, relevantSymbols, and notes whenever possible.",
 		"When handing off from human-review, include commitIntent=create with a commitMessage unless the human provided an existing commit hash.",
+		"Commit messages must use conventional commits format (type(scope): description). Infer the type (feat, fix, refactor, docs, test, chore, etc.) and scope from the task content. If the repository has a commitlint config, CONTRIBUTING.md with commit guidelines, or other commit convention files, follow those standards instead.",
 		buildExampleJson(),
 		`Workflow: ${packet.workflow}:${packet.workflowState}`,
 		`Task: ${packet.task.id} — ${packet.task.summary}`,
