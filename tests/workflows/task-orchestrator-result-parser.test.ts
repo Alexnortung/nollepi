@@ -40,6 +40,19 @@ describe("parseTaskOrchestratorResult", () => {
 		assert.equal(parsed.result.dispatchRequests?.[1].role, "builder");
 	});
 
+	it("throws when builder dispatch request omits doneCriteria", () => {
+		const text = [
+			"Retrying builder dispatch.",
+			"",
+			"TASK_ORCHESTRATOR_JSON:",
+			'{"status":"continue","summary":"Retrying builder dispatch.","dispatchRequests":[{"role":"builder","goal":"Implement change","successTarget":"Write code"}]}',
+		].join("\n");
+		assert.throws(
+			() => parseTaskOrchestratorResult(text),
+			/Builder dispatch requests must include doneCriteria: string\[\]\./,
+		);
+	});
+
 	it("throws when payload is missing", () => {
 		assert.throws(() => parseTaskOrchestratorResult("plain text only"), /TASK_ORCHESTRATOR_JSON/);
 	});

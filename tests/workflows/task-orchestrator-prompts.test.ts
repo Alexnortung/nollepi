@@ -35,6 +35,15 @@ describe("task orchestrator prompts", () => {
 		assert.match(prompt, /Do not ask the high-level orchestrator to dispatch/i);
 	});
 
+	it("system prompt requires doneCriteria for builder dispatch requests", () => {
+		const prompt = buildTaskOrchestratorSystemPrompt(packet);
+		assert.match(prompt, /builder dispatchRequests MUST include doneCriteria as string\[\]/i);
+		assert.match(
+			prompt,
+			/"role":"builder","goal":"Implement change","successTarget":"Write code","doneCriteria":\["tests pass"\]/,
+		);
+	});
+
 	it("user prompt includes packet and human message", () => {
 		const prompt = buildTaskOrchestratorUserPrompt(packet, "Please inspect the repo first.");
 		assert.match(prompt, /Please inspect the repo first\./i);

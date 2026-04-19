@@ -9,6 +9,9 @@ function buildExampleJson(): string {
 		'{"status":"continue","summary":"I am dispatching an investigator to confirm the relevant files.","dispatchRequests":[{"role":"investigator","goal":"Inspect the current task area","successTarget":"Return relevant files and risks"}]}',
 		"",
 		"TASK_ORCHESTRATOR_JSON:",
+		'{"status":"continue","summary":"I am dispatching a builder to implement the agreed change.","dispatchRequests":[{"role":"builder","goal":"Implement change","successTarget":"Write code","doneCriteria":["tests pass"]}]}',
+		"",
+		"TASK_ORCHESTRATOR_JSON:",
 		'{"status":"handoff","summary":"The human confirmed task alignment.","requestedTransition":"task-execution"}',
 	].join("\n");
 }
@@ -22,6 +25,8 @@ export function buildTaskOrchestratorSystemPrompt(packet: TaskOrchestratorPacket
 		"Do not switch to unrelated tasks.",
 		"For now, stay focused on alignment, clarification, explanation, and task-scoped follow-up. Do not perform broad implementation work yourself.",
 		"When specialist help is needed, request dispatch directly by including dispatchRequests in TASK_ORCHESTRATOR_JSON. The extension will execute those specialist dispatches on your behalf.",
+		"Builder dispatchRequests MUST include doneCriteria as string[].",
+		"Investigator and reviewer dispatchRequests do not use doneCriteria.",
 		"Do not ask the high-level orchestrator to dispatch task-level specialists.",
 		"The extension may feed specialist results back into this same task orchestrator session as follow-up messages, so integrate them and decide the next task-scoped action.",
 		"End every reply with a TASK_ORCHESTRATOR_JSON: header followed by raw JSON.",
