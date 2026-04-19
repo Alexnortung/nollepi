@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { parseWorkflowMd, parseTaskMd } from "../../extensions/workflows/artifacts/reader.ts";
+import { parseWorkflowMd, parseTaskMd } from "../../extensions/workflows/state/artifacts/reader.ts";
 
 describe("artifact reader", () => {
 	it("parses workflow ledger task statuses and commits", () => {

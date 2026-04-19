@@ -2,11 +2,11 @@ import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { Box, Text } from "@mariozechner/pi-tui";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { readTaskStateFromArtifacts } from "./artifacts/reader.ts";
-import { MtimeTracker } from "./artifacts/mtime-tracker.ts";
-import { buildRunId, getRunDir, getStepMdPath, getTaskMdPath, getWorkflowMdPath } from "./artifacts/paths.ts";
-import { getRunTitleCandidate, shouldCreateRunArtifacts } from "./artifacts/run-metadata.ts";
-import { writeWorkflowArtifacts } from "./artifacts/writer.ts";
+import { readTaskStateFromArtifacts } from "./state/artifacts/reader.ts";
+import { MtimeTracker } from "./state/artifacts/mtime-tracker.ts";
+import { buildRunId, getRunDir, getStepMdPath, getTaskMdPath, getWorkflowMdPath } from "./state/artifacts/paths.ts";
+import { getRunTitleCandidate, shouldCreateRunArtifacts } from "./state/artifacts/run-metadata.ts";
+import { writeWorkflowArtifacts } from "./state/artifacts/writer.ts";
 import { buildWorkflowPrompt } from "./prompts/prompt-builder.ts";
 import { renderSidebar, type SidebarState } from "./sidebar/renderer.ts";
 import {

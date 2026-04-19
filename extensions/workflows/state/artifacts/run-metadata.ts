@@ -1,6 +1,6 @@
-import type { AlignmentState } from "../state/alignment-state.ts";
-import type { TaskRuntimeState } from "../state/task-state.ts";
-import type { WorkflowName } from "../state/workflow-state.ts";
+import type { AlignmentState } from "../alignment-state.ts";
+import type { TaskRuntimeState } from "../task-state.ts";
+import type { WorkflowName } from "../workflow-state.ts";
 
 const ARTIFACT_RUN_WORKFLOWS = new Set<WorkflowName>(["alignment", "autonomous"]);
 const PRE_RUN_ARTIFACT_STATES = new Set(["idle", "intake"]);

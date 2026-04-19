@@ -6,7 +6,7 @@ import {
 	getRunTitleCandidate,
 	shouldCreateRunArtifacts,
 	summarizeRunTitle,
-} from "../../extensions/workflows/artifacts/run-metadata.ts";
+} from "../../extensions/workflows/state/artifacts/run-metadata.ts";
 
 describe("run metadata", () => {
 	it("does not create run artifacts during idle or intake", () => {

@@ -6,8 +6,8 @@ import * as path from "node:path";
 import { TaskState } from "../../extensions/workflows/state/task-state.ts";
 import { restorePersistedWorkflowState, toPersistedWorkflowState } from "../../extensions/workflows/state/persisted-state.ts";
 import { createWorkflowRuntime } from "../../extensions/workflows/state/workflow-state.ts";
-import { writeWorkflowArtifacts } from "../../extensions/workflows/artifacts/writer.ts";
-import { readTaskStateFromArtifacts } from "../../extensions/workflows/artifacts/reader.ts";
+import { writeWorkflowArtifacts } from "../../extensions/workflows/state/artifacts/writer.ts";
+import { readTaskStateFromArtifacts } from "../../extensions/workflows/state/artifacts/reader.ts";
 
 describe("artifact sync", () => {
 	it("writes workflow artifacts then reads task state back", async () => {

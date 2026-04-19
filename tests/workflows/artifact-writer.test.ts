@@ -8,7 +8,7 @@ import {
 	renderTaskMd,
 	renderStepMd,
 	writeWorkflowArtifacts,
-} from "../../extensions/workflows/artifacts/writer.ts";
+} from "../../extensions/workflows/state/artifacts/writer.ts";
 import { TaskState } from "../../extensions/workflows/state/task-state.ts";
 
 describe("artifact writer", () => {

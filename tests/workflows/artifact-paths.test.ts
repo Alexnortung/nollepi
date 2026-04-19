@@ -7,7 +7,7 @@ import {
 	getTaskDir,
 	getTaskMdPath,
 	getStepMdPath,
-} from "../../extensions/workflows/artifacts/paths.ts";
+} from "../../extensions/workflows/state/artifacts/paths.ts";
 
 describe("artifact paths", () => {
 	it("builds stable run id", () => {

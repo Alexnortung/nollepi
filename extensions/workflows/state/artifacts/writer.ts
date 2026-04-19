@@ -1,7 +1,7 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { getStepMdPath, getTaskMdPath, getWorkflowMdPath } from "./paths.ts";
-import type { TaskRuntimeState, WorkflowStep, WorkflowTask } from "../state/task-state.ts";
+import type { TaskRuntimeState, WorkflowStep, WorkflowTask } from "../task-state.ts";
 
 export function renderWorkflowMd(input: {
 	title: string;
