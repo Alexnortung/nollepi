@@ -9,6 +9,7 @@ const pkg = JSON.parse(fs.readFileSync(new URL("../package.json", import.meta.ur
 test("package manifest points pi at concrete extension package directories and vendored packages", () => {
 	assert.deepEqual(pkg.pi?.extensions, [
 		"./extensions/guards",
+		"./extensions/utils",
 		"./extensions/pi-usage-extension",
 		"./extensions/workflows",
 	]);
