@@ -102,7 +102,6 @@
               exec ${upstreamPi}/bin/pi \
                 --no-extensions \
                 --extension ${piPackageDir} \
-                --skill ${./skills} \
                 "$@"
             '';
           };
